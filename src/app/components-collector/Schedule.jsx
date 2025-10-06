@@ -41,42 +41,5 @@ export default function Schedule() {
     return `${h}:${minute} ${ampm}`;
   };
 
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-      {/* Header */}
-      <div className="px-4 sm:px-6 py-3 border-b border-gray-200 bg-gray-50">
-        <h2 className="text-sm sm:text-base font-semibold text-gray-900">
-          Weekly Collection Schedule
-        </h2>
-      </div>
-
-      {/* Grid */}
-      <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {schedule.length > 0 ? (
-          schedule.map((day) => (
-            <div
-              key={day.id}
-              className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition"
-            >
-              <h3 className="text-sm font-semibold text-gray-900">
-                {formatDateWithDay(day.date)}
-              </h3>
-
-              <p className="mt-1 text-xs text-gray-600">
-                {day.purok} ({day.plan !== "Not set" ? `Plan ${day.plan}` : "No Plan"})
-              </p>
-
-              <p className="mt-2 text-xs font-medium text-gray-700">
-                {formatTime(day.start)} – {formatTime(day.end)}
-              </p>
-            </div>
-          ))
-        ) : (
-          <p className="text-sm text-gray-500 col-span-full text-center">
-            No schedule available
-          </p>
-        )}
-      </div>
-    </div>
-  );
+  
 }

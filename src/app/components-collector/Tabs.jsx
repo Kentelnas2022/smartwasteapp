@@ -2,14 +2,12 @@
 import { useState } from "react";
 import { Map, ClipboardList } from "lucide-react";
 import CollectionStatus from "./CollectionStatus";
-import RoutesManagement from "./RoutesManagement";
 
 export default function Tabs() {
   const [activeTab, setActiveTab] = useState("collection");
 
   const tabs = [
     { id: "collection", label: "Collection Status", icon: ClipboardList },
-    { id: "routes", label: "Route Management", icon: Map },
   ];
 
   return (
@@ -40,7 +38,7 @@ export default function Tabs() {
       {/* Tab content */}
       <div className="p-4 sm:p-6">
         {activeTab === "collection" && <CollectionStatus />}
-        {activeTab === "routes" && <RoutesManagement />}
+
       </div>
     </div>
   );

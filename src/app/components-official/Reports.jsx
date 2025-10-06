@@ -167,7 +167,6 @@ export default function Reports() {
     );
 
     try {
-      // ✅ Prevent duplicates in report_status using onConflict
       const { data: updated, error } = await supabase
         .from("report_status")
         .upsert(
@@ -184,28 +183,24 @@ export default function Reports() {
 
       if (error) throw error;
 
-      await supabase.from("activities").insert([
-        {
-          action: resolve ? "Marked report as resolved" : "Responded to report",
-          type: "report_update",
-          created_at: new Date().toISOString(),
-        },
-      ]);
+      await supabase.from("activities").insert([{
+        action: resolve ? "Marked report as resolved" : "Responded to report",
+        type: "report_update",
+        created_at: new Date().toISOString(),
+      }]);
 
       if (report.user_id) {
         const notifMessage = resolve
-          ? `✅ Your report has been marked as resolved${
+          ? ` Your report has been marked as resolved${
               updated?.official_response ? `: ${updated.official_response}` : "."
             }`
           : `📝 Official responded: ${updated?.official_response}`;
-        await supabase.from("notifications").insert([
-          {
-            report_id: report.id,
-            user_id: report.user_id,
-            message: notifMessage,
-            read: false,
-          },
-        ]);
+        await supabase.from("notifications").insert([{
+          report_id: report.id,
+          user_id: report.user_id,
+          message: notifMessage,
+          read: false,
+        }]);
       }
     } catch (err) {
       console.error("❌ handleRespond error:", err.message || err);

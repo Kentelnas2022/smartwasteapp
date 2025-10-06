@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Bell, LogOut, Settings, User } from "lucide-react";
+import { Bell, LogOut, Settings, UserRound, CheckCircle2, CircleUserRound } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../supabaseClient";
@@ -27,10 +27,27 @@ export default function Header(props: HeaderProps) {
   const [open, setOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [currentDate, setCurrentDate] = useState(""); // State for current date/time
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
-
   const router = useRouter();
+
+  // Update current date/time every second
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentDate(new Date().toLocaleString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        month: "short",
+        day: "numeric",
+      }));
+    }, 1000);
+
+    // Cleanup interval on component unmount
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -107,7 +124,6 @@ export default function Header(props: HeaderProps) {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-
     await supabase.from("notifications").update({ read: true }).eq("user_id", user.id);
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
@@ -125,29 +141,34 @@ export default function Header(props: HeaderProps) {
 
   return (
     <motion.header
-      className="flex items-center justify-between px-6 py-6 bg-[#AD2B49] text-white shadow-md relative w-full"
-      initial={{ y: -50, opacity: 0 }}
+      className="flex items-center justify-between px-5 py-4 sm:px-8 bg-red-900 text-white shadow-lg sticky top-0 z-50"
+      initial={{ y: -40, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 0.4 }}
     >
-      <h1 className="text-lg sm:text-2xl font-bold tracking-wide border-r-4 pr-2">
-        Welcome, {userName || "Resident"}!
-      </h1>
+      {/* Greeting */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+        <h1 className="text-base sm:text-xl font-bold">Welcome, {userName || "Resident"}!</h1>
+        <p className="text-xs sm:text-sm text-gray-200">
+          {currentDate}
+        </p>
+      </div>
 
-      <div className="flex items-center gap-6 relative">
+      {/* Actions */}
+      <div className="flex items-center gap-4 sm:gap-6">
         {/* 🔔 Notifications */}
         <div ref={notifRef} className="relative">
           <button
-            className="relative hover:scale-110 transition"
+            className="relative hover:scale-110 transition-transform duration-200"
             onClick={() => {
               const newState = !notifOpen;
               setNotifOpen(newState);
               if (newState) markAllAsRead();
             }}
           >
-            <Bell className="w-7 h-7 cursor-pointer" />
+            <Bell className="w-6 h-6 sm:w-7 sm:h-7 cursor-pointer" />
             {notifications.some((n) => !n.read) && (
-              <span className="absolute -top-1 -right-1 flex items-center justify-center w-5 h-5 text-xs bg-yellow-400 text-black rounded-full font-semibold">
+              <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 text-[10px] bg-yellow-400 text-red-900 rounded-full font-bold">
                 {notifications.filter((n) => !n.read).length}
               </span>
             )}
@@ -160,20 +181,18 @@ export default function Header(props: HeaderProps) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25 }}
-                className="absolute right-0 mt-3 w-80 sm:w-96 bg-white text-gray-800 rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 max-h-[80vh] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
+                className="absolute right-0 mt-3 w-80 sm:w-96 bg-white text-gray-800 rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50 max-h-[75vh] overflow-y-auto"
               >
-                {/* Header */}
                 <div className="flex items-center justify-between px-5 py-3 border-b bg-gray-50 sticky top-0 z-10">
                   <h3 className="text-base font-semibold text-gray-800">Notifications</h3>
                   <button
                     onClick={markAllAsRead}
-                    className="text-xs font-medium text-[#AD2B49] hover:underline"
+                    className="text-xs font-medium text-red-900 hover:underline"
                   >
                     Mark all read
                   </button>
                 </div>
 
-                {/* Notification List */}
                 {notifications.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-gray-400 text-sm">
                     <Bell className="w-7 h-7 mb-2 text-gray-300" />
@@ -187,28 +206,9 @@ export default function Header(props: HeaderProps) {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.2 }}
                       className={`flex items-start gap-3 px-5 py-4 border-b last:border-none hover:bg-gray-50 transition ${
-                        notif.read ? "bg-white" : "bg-[#FFF5F7]"
+                        notif.read ? "bg-white" : "bg-red-50"
                       }`}
                     >
-                      {/* Status icon */}
-                      <div className="flex-shrink-0">
-                        {notif.read ? (
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            strokeWidth={2}
-                            stroke="#AD2B49"
-                            className="w-5 h-5 opacity-60 mt-1"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                        ) : (
-                          <div className="w-3 h-3 rounded-full bg-[#AD2B49] mt-1"></div>
-                        )}
-                      </div>
-
-                      {/* Message */}
                       <div className="flex-1">
                         <p
                           className={`text-sm leading-snug ${
@@ -232,13 +232,13 @@ export default function Header(props: HeaderProps) {
         {/* 👤 Profile */}
         <div className="relative" ref={dropdownRef}>
           <div
-            className="w-11 h-11 rounded-full overflow-hidden border-2 border-white cursor-pointer hover:scale-105 transition flex items-center justify-center bg-gray-200 text-[#AD2B49] font-bold"
+            className="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border-2 border-white cursor-pointer hover:scale-105 transition-all flex items-center justify-center bg-gray-100 text-red-900"
             onClick={() => setOpen(!open)}
           >
             {userAvatar ? (
               <img src={userAvatar} alt="Profile" className="w-full h-full object-cover" />
             ) : (
-              initials
+              <CircleUserRound className="w-6 h-6" />
             )}
           </div>
 
@@ -249,14 +249,14 @@ export default function Header(props: HeaderProps) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
-                className="absolute right-0 mt-3 w-60 bg-white text-gray-800 rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50"
+                className="absolute right-0 mt-3 w-60 bg-white text-gray-800 rounded-2xl shadow-lg border border-gray-200 overflow-hidden z-50"
               >
                 <div className="flex items-center gap-3 px-4 py-4 bg-gray-50 border-b">
-                  <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center text-[#AD2B49] font-bold">
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center text-red-900">
                     {userAvatar ? (
                       <img src={userAvatar} alt="Profile" className="w-full h-full object-cover" />
                     ) : (
-                      initials
+                      <CircleUserRound className="w-6 h-6" />
                     )}
                   </div>
                   <div>
@@ -266,21 +266,21 @@ export default function Header(props: HeaderProps) {
                 </div>
                 <a
                   href="/profile"
-                  className="flex items-center gap-2 px-4 py-3 hover:bg-gray-100 hover:text-[#AD2B49]"
+                  className="flex items-center gap-2 px-4 py-3 hover:bg-gray-100 hover:text-red-900"
                 >
-                  <User className="w-5 h-5" />
+                  <UserRound className="w-5 h-5" />
                   View Profile
                 </a>
                 <a
                   href="/settings"
-                  className="flex items-center gap-2 px-4 py-3 hover:bg-gray-100 hover:text-[#AD2B49]"
+                  className="flex items-center gap-2 px-4 py-3 hover:bg-gray-100 hover:text-red-900"
                 >
                   <Settings className="w-5 h-5" />
                   Settings
                 </a>
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center gap-2 px-4 py-3 hover:bg-gray-100 hover:text-[#AD2B49] text-left"
+                  className="w-full flex items-center gap-2 px-4 py-3 hover:bg-gray-100 hover:text-red-900 text-left"
                 >
                   <LogOut className="w-5 h-5" />
                   Logout

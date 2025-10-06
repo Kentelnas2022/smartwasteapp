@@ -37,11 +37,8 @@ export default function SMS() {
       .select("*")
       .order("sent_at", { ascending: false });
 
-    if (error) {
-      console.error("Error fetching SMS history:", error);
-    } else {
-      setHistory(data || []);
-    }
+    if (!error) setHistory(data || []);
+    else console.error("Error fetching SMS history:", error);
   };
 
   // ✅ Fetch statistics
@@ -49,29 +46,25 @@ export default function SMS() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const { data: todayData, error: todayError } = await supabase
+    const { data: todayData } = await supabase
       .from("sms_archive")
       .select("*")
       .gte("sent_at", today.toISOString());
 
-    if (!todayError) {
-      setSentToday(todayData.length);
-    }
+    setSentToday(todayData?.length || 0);
 
-    const { count, error: totalError } = await supabase
+    const { count } = await supabase
       .from("sms_archive")
       .select("id", { count: "exact" });
 
-    if (!totalError) {
-      setTotalRecipients(count);
-    }
+    setTotalRecipients(count || 0);
   };
 
-  // Archive a message with SweetAlert
+  // Archive message
   const archiveMessage = async (id) => {
     const result = await Swal.fire({
       title: "Archive Message?",
-      text: "Are you sure you want to move this message to the archive?",
+      text: "Move this message to the archive?",
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#fbbf24",
@@ -86,11 +79,11 @@ export default function SMS() {
     }
   };
 
-  // Restore a message with SweetAlert
+  // Restore message
   const restoreMessage = async (id) => {
     const result = await Swal.fire({
       title: "Restore Message?",
-      text: "Do you want to move this message back to Recent?",
+      text: "Move this message back to Recent?",
       icon: "question",
       showCancelButton: true,
       confirmButtonColor: "#22c55e",
@@ -105,7 +98,7 @@ export default function SMS() {
     }
   };
 
-  // Message templates
+  // Templates
   const messageTemplates = {
     custom: "",
     collection:
@@ -118,7 +111,6 @@ export default function SMS() {
       "⚠️ Emergency Alert: Please be advised of an urgent waste-related announcement from Barangay Tambacan.",
   };
 
-  // Handle type change
   const handleTypeChange = (e) => {
     const type = e.target.value;
     setMessageType(type);
@@ -159,7 +151,7 @@ export default function SMS() {
     }
 
     fetchHistory();
-    fetchStats(); // ✅ refresh stats
+    fetchStats();
     setMessage("");
     setCharCount(0);
     setSchedule(false);
@@ -170,23 +162,23 @@ export default function SMS() {
   };
 
   return (
-    <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 p-2 sm:p-4">
       {/* Send SMS */}
-      <div className="bg-white rounded-2xl shadow-lg p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-          <Send className="w-6 h-6 text-green-600" /> Send SMS Alert
+      <div className="bg-white rounded-2xl shadow-md sm:shadow-lg p-4 sm:p-6 border border-gray-100">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+          <Send className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" /> Send SMS Alert
         </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
           {/* Recipient Group */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1 sm:mb-2 flex items-center gap-2">
               <Users className="w-4 h-4 text-gray-500" /> Recipient Group
             </label>
             <select
               value={recipientGroup}
               onChange={(e) => setRecipientGroup(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm sm:text-base focus:ring-2 focus:ring-green-500 focus:border-transparent"
             >
               <option value="all">All Residents (150 contacts)</option>
               <option value="purok1">Purok 1 (45 contacts)</option>
@@ -200,13 +192,13 @@ export default function SMS() {
 
           {/* Message Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1 sm:mb-2 flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-gray-500" /> Message Type
             </label>
             <select
               value={messageType}
               onChange={handleTypeChange}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm sm:text-base focus:ring-2 focus:ring-green-500 focus:border-transparent"
             >
               <option value="custom">Custom Message</option>
               <option value="collection">Collection Reminder</option>
@@ -218,7 +210,7 @@ export default function SMS() {
 
           {/* Message Box */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1 sm:mb-2 flex items-center gap-2">
               <Inbox className="w-4 h-4 text-gray-500" /> Message
             </label>
             <textarea
@@ -227,9 +219,9 @@ export default function SMS() {
               rows="4"
               maxLength="160"
               placeholder="Enter your message here..."
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm sm:text-base focus:ring-2 focus:ring-green-500 focus:border-transparent"
             />
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-xs sm:text-sm text-gray-500 mt-1">
               Character count: {charCount}/160
             </p>
           </div>
@@ -253,24 +245,24 @@ export default function SMS() {
                 type="datetime-local"
                 value={scheduleTime}
                 onChange={(e) => setScheduleTime(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm sm:text-base"
               />
             </div>
           )}
 
           <button
             type="submit"
-            className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+            className="w-full bg-green-600 hover:bg-green-700 text-white py-2 sm:py-3 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
           >
-            <Send className="w-5 h-5" /> Send SMS Alert
+            <Send className="w-4 h-4 sm:w-5 sm:h-5" /> Send SMS Alert
           </button>
         </form>
       </div>
 
       {/* SMS History & Archive */}
-      <div className="bg-white rounded-2xl shadow-lg p-6">
+      <div className="bg-white rounded-2xl shadow-md sm:shadow-lg p-4 sm:p-6 border border-gray-100">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+          <h3 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center gap-2">
             {showArchive ? (
               <>
                 <Archive className="w-5 h-5 text-gray-600" /> Archived SMS
@@ -283,15 +275,16 @@ export default function SMS() {
           </h3>
           <button
             onClick={() => setShowArchive(!showArchive)}
-            className="text-sm bg-gray-200 px-3 py-1 rounded hover:bg-gray-300"
+            className="text-xs sm:text-sm bg-gray-100 px-3 py-1.5 rounded hover:bg-gray-200 transition"
           >
             {showArchive ? "Show Recent" : "Show Archive"}
           </button>
         </div>
 
-        <div className="space-y-4">
+        {/* History List */}
+        <div className="space-y-3 sm:space-y-4 max-h-[400px] overflow-y-auto">
           {history.filter((h) => h.archived === showArchive).length === 0 ? (
-            <p className="text-gray-500 italic text-center py-6">
+            <p className="text-gray-500 italic text-center py-6 text-sm">
               {showArchive
                 ? "No archived messages..."
                 : "No recent messages yet..."}
@@ -302,7 +295,7 @@ export default function SMS() {
               .map((entry) => (
                 <div
                   key={entry.id}
-                  className="p-4 bg-gray-50 rounded-lg border border-gray-200 relative"
+                  className="p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200 relative"
                 >
                   <p className="text-sm text-gray-700">
                     <span className="font-semibold">To:</span>{" "}
@@ -327,14 +320,14 @@ export default function SMS() {
                   {!entry.archived ? (
                     <button
                       onClick={() => archiveMessage(entry.id)}
-                      className="absolute top-2 right-2 text-xs bg-yellow-200 px-2 py-1 rounded hover:bg-yellow-300 flex items-center gap-1"
+                      className="absolute top-2 right-2 text-xs bg-yellow-100 px-2 py-1 rounded hover:bg-yellow-200 flex items-center gap-1"
                     >
                       <Archive className="w-3 h-3" /> Archive
                     </button>
                   ) : (
                     <button
                       onClick={() => restoreMessage(entry.id)}
-                      className="absolute top-2 right-2 text-xs bg-green-200 px-2 py-1 rounded hover:bg-green-300 flex items-center gap-1"
+                      className="absolute top-2 right-2 text-xs bg-green-100 px-2 py-1 rounded hover:bg-green-200 flex items-center gap-1"
                     >
                       <RotateCcw className="w-3 h-3" /> Restore
                     </button>
@@ -345,18 +338,20 @@ export default function SMS() {
         </div>
 
         {/* Stats */}
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+        <div className="mt-5 p-4 bg-blue-50 rounded-lg border border-blue-100">
           <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-blue-600" /> SMS Analytics
           </h4>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="bg-white p-3 rounded-lg shadow-sm text-center">
-              <p className="text-gray-600">Messages Sent Today</p>
-              <p className="text-2xl font-bold text-blue-600">{sentToday}</p>
+          <div className="grid grid-cols-2 gap-3 text-sm sm:text-base">
+            <div className="bg-white p-3 rounded-lg shadow-sm text-center border border-gray-100">
+              <p className="text-gray-600">Sent Today</p>
+              <p className="text-xl sm:text-2xl font-bold text-blue-600">
+                {sentToday}
+              </p>
             </div>
-            <div className="bg-white p-3 rounded-lg shadow-sm text-center">
+            <div className="bg-white p-3 rounded-lg shadow-sm text-center border border-gray-100">
               <p className="text-gray-600">Total Messages</p>
-              <p className="text-2xl font-bold text-green-600">
+              <p className="text-xl sm:text-2xl font-bold text-green-600">
                 {totalRecipients}
               </p>
             </div>

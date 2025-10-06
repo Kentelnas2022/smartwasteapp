@@ -8,7 +8,6 @@ import Header from "./components-official/Header";
 import NavigationTabs from "./components-official/NavigationTabs";
 import Dashboard from "./components-official/Dashboard";
 import Schedule from "./components-official/Schedule";
-import Routes from "./components-official/Routes";
 import SMS from "./components-official/SMS";
 import Reports from "./components-official/Reports";
 import Education from "./components-official/Education";
@@ -45,7 +44,6 @@ export default function Home() {
       <main className="container mx-auto px-4 py-8 space-y-8">
         {activeTab === "Dashboard" && <Dashboard />}
         {activeTab === "Schedule" && <Schedule />}
-        {activeTab === "Routes" && <Routes />}
         {activeTab === "SMS Alerts" && <SMS />}
         {activeTab === "Reports" && <Reports />}
         {activeTab === "Education" && <Education />}

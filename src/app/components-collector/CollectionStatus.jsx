@@ -234,23 +234,24 @@ export default function CollectionStatus() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
     >
+      {/* ✅ Soft gradient background */}
       <div className="absolute inset-0 bg-gradient-to-br from-blue-50/40 to-purple-50/40 rounded-2xl -z-10"></div>
 
       {/* Stats Overview */}
       <StatsOverview puroks={sortedSchedules} />
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-gray-100 shadow-sm">
-        <table className="w-full border-collapse text-sm sm:text-base">
+      {/* ✅ Responsive container for table */}
+      <div className="overflow-x-auto rounded-xl border border-gray-100 shadow-sm mt-4">
+        <table className="w-full min-w-[650px] border-collapse text-xs sm:text-sm md:text-base">
           <thead>
-            <tr className="bg-gradient-to-r from-indigo-50 to-purple-50 text-xs sm:text-sm border-b border-gray-200">
-              <th className="text-left py-3 px-4 font-semibold text-gray-700">Purok</th>
-              <th className="text-left py-3 px-4 font-semibold text-gray-700">Route Type</th>
-              <th className="text-left py-3 px-4 font-semibold text-gray-700">Route Plan</th>
-              <th className="text-left py-3 px-4 font-semibold text-gray-700">Schedule</th>
-              <th className="text-left py-3 px-4 font-semibold text-gray-700">Waste Type</th>
-              <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
-              <th className="py-3 px-4 font-semibold text-gray-700 text-right">Actions</th>
+            <tr className="bg-gradient-to-r from-indigo-50 to-purple-50 text-[11px] sm:text-sm border-b border-gray-200">
+              <th className="text-left py-3 px-2 sm:px-4 font-semibold text-gray-700">Purok</th>
+              <th className="text-left py-3 px-2 sm:px-4 font-semibold text-gray-700">Route Type</th>
+              <th className="text-left py-3 px-2 sm:px-4 font-semibold text-gray-700">Route Plan</th>
+              <th className="text-left py-3 px-2 sm:px-4 font-semibold text-gray-700">Schedule</th>
+              <th className="text-left py-3 px-2 sm:px-4 font-semibold text-gray-700">Waste Type</th>
+              <th className="text-left py-3 px-2 sm:px-4 font-semibold text-gray-700">Status</th>
+              <th className="py-3 px-2 sm:px-4 font-semibold text-gray-700 text-right">Actions</th>
             </tr>
           </thead>
 
@@ -265,37 +266,41 @@ export default function CollectionStatus() {
                   transition={{ duration: 0.4 }}
                   className="border-b border-gray-100 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 transition"
                 >
-                  <td className="py-3 px-4 font-medium text-gray-800">{p.purok}</td>
+                  <td className="py-3 px-2 sm:px-4 font-medium text-gray-800 whitespace-nowrap">
+                    {p.purok}
+                  </td>
 
-                  <td className="py-3 px-4 text-gray-600">
+                  <td className="py-3 px-2 sm:px-4 text-gray-600">
                     <button
                       onClick={() => setMapSelected(p)}
                       className="text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
                     >
-                      <Eye size={18} />
-                      {p.routeType}
+                      <Eye size={16} />
+                      <span className="truncate">{p.routeType}</span>
                     </button>
                   </td>
 
-                  <td className="py-3 px-4 text-gray-600">{p.routePlan}</td>
+                  <td className="py-3 px-2 sm:px-4 text-gray-600 truncate">
+                    {p.routePlan}
+                  </td>
 
-                  <td className="py-3 px-4 text-gray-700">
+                  <td className="py-3 px-2 sm:px-4 text-gray-700 whitespace-nowrap">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                      <span className="font-medium">
+                      <span className="font-medium text-gray-800">
                         {formatDateWithDay(p.scheduleDate, p.scheduleDay)}
                       </span>
-                      <span className="text-gray-500">
+                      <span className="text-gray-500 text-xs sm:text-sm">
                         {formatTime(p.scheduleStart)} – {formatTime(p.scheduleEnd)}
                       </span>
                     </div>
                   </td>
 
-                  <td className="py-3 px-4 text-gray-600">{p.wasteType}</td>
+                  <td className="py-3 px-2 sm:px-4 text-gray-600">{p.wasteType}</td>
 
-                  <td className="py-3 px-4">
+                  <td className="py-3 px-2 sm:px-4">
                     <motion.span
                       layout
-                      className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium capitalize ${getStatusClasses(
+                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-medium capitalize ${getStatusClasses(
                         p.status
                       )}`}
                       initial={{ scale: 0.8, opacity: 0 }}
@@ -306,12 +311,12 @@ export default function CollectionStatus() {
                     </motion.span>
                   </td>
 
-                  <td className="py-3 px-4 text-right">
+                  <td className="py-3 px-2 sm:px-4 text-right">
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => setSelected(p)}
-                      className="px-3 py-1.5 text-xs sm:text-sm bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg shadow hover:from-indigo-700 hover:to-purple-700 transition-all"
+                      className="px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm bg-red-900 text-white rounded-lg shadow hover:from-indigo-700 hover:to-purple-700 transition-all"
                     >
                       Update
                     </motion.button>
@@ -322,7 +327,7 @@ export default function CollectionStatus() {
           </tbody>
         </table>
 
-        {/* Status Modal */}
+        {/* ✅ Status Modal */}
         {selected && (
           <StatusModal
             key={selected?.id}
@@ -332,10 +337,10 @@ export default function CollectionStatus() {
           />
         )}
 
-        {/* Map Modal */}
+        {/* ✅ Map Modal */}
         {mapSelected && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl shadow-xl w-11/12 md:w-2/3 lg:w-1/2 p-4 relative">
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-2">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg md:max-w-2xl p-4 relative">
               <button
                 className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
                 onClick={() => setMapSelected(null)}
@@ -346,7 +351,7 @@ export default function CollectionStatus() {
                 Route for {mapSelected.purok}
               </h2>
 
-              <div className="h-96 w-full rounded-lg overflow-hidden">
+              <div className="h-80 sm:h-96 w-full rounded-lg overflow-hidden">
                 <MapContainer
                   center={
                     parseCoordinates(mapSelected.coordinates)[0] || [

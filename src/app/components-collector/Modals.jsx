@@ -1,10 +1,13 @@
 "use client";
 import { useState } from "react";
 import { motion } from "framer-motion";
+import Swal from "sweetalert2";
+import { XMarkIcon } from "@heroicons/react/24/outline";
 
 export function StatusModal({ purok, onClose, onUpdate }) {
   const [status, setStatus] = useState(purok?.status || "not-started");
   const [notes, setNotes] = useState(purok?.notes || "");
+  const [isUpdating, setIsUpdating] = useState(false);
 
   if (!purok) return null;
 
@@ -14,58 +17,92 @@ export function StatusModal({ purok, onClose, onUpdate }) {
     { value: "completed", label: "Completed", color: "green" },
   ];
 
+  const handleUpdateClick = async () => {
+    setIsUpdating(true);
+
+    try {
+      // Call your update function
+      await onUpdate({ ...purok, status, notes });
+
+      // Show success alert
+      Swal.fire({
+        title: "Status Updated!",
+        text: `${purok.purok} has been successfully updated.`,
+        icon: "success",
+        confirmButtonColor: "#7f1d1d", // red-900
+        background: "#fff",
+        color: "#000",
+        confirmButtonText: "OK",
+      });
+
+      onClose();
+    } catch (error) {
+      console.error(error);
+      Swal.fire({
+        title: "Update Failed",
+        text: "There was an issue updating the status. Please try again.",
+        icon: "error",
+        confirmButtonColor: "#7f1d1d",
+        background: "#fff",
+        color: "#000",
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   return (
     <motion.div
-      className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4"
+      className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
       <motion.div
-        className="bg-white rounded-xl w-full max-w-lg sm:max-w-md shadow-lg border border-gray-200 flex flex-col"
-        initial={{ y: 300 }}
-        animate={{ y: 0 }}
-        exit={{ y: 300 }}
-        transition={{ duration: 0.3 }}
+        className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 120, damping: 15 }}
       >
         {/* Header */}
-        <div className="flex justify-between items-center px-4 sm:px-6 py-3 sm:py-4 border-b">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900">
+        <div className="flex justify-between items-center px-5 py-4 bg-red-900">
+          <h3 className="text-white text-lg font-semibold tracking-wide">
             Update Status
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-lg sm:text-xl"
+            className="p-1 text-white hover:bg-white/20 rounded-full transition"
           >
-            ✕
+            <XMarkIcon className="w-6 h-6" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="px-4 sm:px-6 py-4 sm:py-6 space-y-5 overflow-y-auto max-h-[70vh]">
+        <div className="p-5 sm:p-6 space-y-6 bg-white overflow-y-auto max-h-[70vh]">
           {/* Purok Info */}
-          <div className="bg-gray-50 rounded-lg px-4 py-3">
-            <p className="text-xs uppercase tracking-wide text-gray-500">
+          <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 shadow-sm">
+            <p className="text-xs uppercase tracking-wider text-gray-500 font-medium">
               Purok Name
             </p>
-            <p className="text-sm sm:text-base font-medium text-gray-900">
+            <p className="text-sm sm:text-base font-semibold text-black mt-1">
               {purok.purok}
             </p>
           </div>
 
-          {/* Status Buttons */}
+          {/* Status Selector */}
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-3">
+            <p className="text-sm font-semibold text-black mb-3">
               Select Status
             </p>
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {options.map((opt) => (
                 <button
                   key={opt.value}
                   onClick={() => setStatus(opt.value)}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition ${
+                  className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl border text-sm font-medium transition-all duration-200 ${
                     status === opt.value
-                      ? `border-${opt.color}-500 bg-${opt.color}-50 text-${opt.color}-700`
+                      ? `border-${opt.color}-500 bg-${opt.color}-50 text-${opt.color}-700 ring-1 ring-${opt.color}-200`
                       : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                   }`}
                 >
@@ -80,30 +117,33 @@ export function StatusModal({ purok, onClose, onUpdate }) {
 
           {/* Notes */}
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">Notes</p>
+            <p className="text-sm font-semibold text-black mb-2">Notes</p>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              rows="3"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Add remarks..."
+              rows="4"
+              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm text-black focus:ring-2 focus:ring-red-900 focus:border-red-900 placeholder-gray-400 resize-none"
+              placeholder="Add remarks about this purok..."
             />
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t bg-gray-50 rounded-b-xl">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 px-5 py-4 border-t bg-gray-50">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition w-full sm:w-auto"
+            className="px-4 py-2 rounded-lg border border-gray-300 text-black hover:bg-gray-100 transition w-full sm:w-auto font-medium"
           >
             Cancel
           </button>
           <button
-            onClick={() => onUpdate({ ...purok, status, notes })}
-            className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition w-full sm:w-auto"
+            disabled={isUpdating}
+            onClick={handleUpdateClick}
+            className={`px-5 py-2 bg-red-900 text-white rounded-lg shadow-md transition w-full sm:w-auto font-medium ${
+              isUpdating ? "opacity-70 cursor-not-allowed" : "hover:bg-red-800"
+            }`}
           >
-            Update
+            {isUpdating ? "Updating..." : "Update"}
           </button>
         </div>
       </motion.div>

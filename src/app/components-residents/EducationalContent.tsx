@@ -46,7 +46,7 @@ function ContentCard({
         <button
           onClick={() => setIsOpen(true)}
           className="inline-flex items-center gap-2 mt-4 px-3 py-2 text-sm font-medium
-                     rounded-lg text-white bg-[#AD2B49] hover:bg-[#92263E] 
+                     rounded-lg text-white bg-red-900 hover:bg-red-900
                      transition-colors"
         >
           Learn More
@@ -157,10 +157,10 @@ export default function EducationalContentList() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-pink-50 to-white">
+    <div className="min-h-screen">
       {/* Sticky Header */}
       <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 p-4">
-        <h1 className="text-lg font-semibold text-[#AD2B49]">
+        <h1 className="text-lg font-semibold text-red-900">
           Educational Content
         </h1>
       </div>

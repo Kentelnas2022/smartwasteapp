@@ -90,7 +90,6 @@ export default function Schedule() {
   const handleAddSchedule = async (e) => {
     e.preventDefault();
 
-    // Insert schedule
     const { data, error } = await supabase
       .from("schedules")
       .insert([
@@ -114,11 +113,9 @@ export default function Schedule() {
       return;
     }
 
-    // ✅ Log to activities
     if (data && data.length > 0) {
       const newSchedule = data[0];
       const actionMessage = `Added new schedule for Purok ${newSchedule.purok} on ${newSchedule.date}`;
-
       const { error: activityError } = await supabase.from("activities").insert([
         {
           action: actionMessage,
@@ -126,13 +123,9 @@ export default function Schedule() {
           schedule_id: newSchedule.id || newSchedule.schedule_id || null,
         },
       ]);
-
-      if (activityError) {
-        console.error("Error logging activity:", activityError);
-      }
+      if (activityError) console.error("Error logging activity:", activityError);
     }
 
-    // Reset form
     setDay("");
     setDate("");
     setPurok("");
@@ -143,7 +136,6 @@ export default function Schedule() {
     setStatus("not-started");
     setRoutePoints([]);
     setIsModalOpen(false);
-
     fetchSchedules();
   };
 
@@ -203,12 +195,12 @@ export default function Schedule() {
       </h2>
 
       {/* Filter Dropdown + Add Button */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="relative">
+      <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
+        <div className="relative w-full sm:w-auto">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className={`appearance-none rounded-lg px-4 py-2 pr-10 shadow-sm focus:outline-none focus:ring-2 transition ${dropdownColors[statusFilter] || "bg-gray-100 text-gray-800"}`}
+            className={`appearance-none rounded-lg px-4 py-2 pr-10 shadow-sm focus:outline-none focus:ring-2 transition w-full sm:w-auto ${dropdownColors[statusFilter] || "bg-gray-100 text-gray-800"}`}
           >
             <option value="all">All</option>
             <option value="not-started">Not Started</option>
@@ -233,67 +225,76 @@ export default function Schedule() {
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg shadow-sm"
+          className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg shadow-sm w-full sm:w-auto"
         >
           + Add Schedule
         </button>
       </div>
 
-      {/* Schedule Table */}
+      {/* ✅ Responsive Table Wrapper */}
       <div className="bg-white shadow rounded-lg overflow-hidden border border-gray-200">
-        <table className="min-w-full text-sm table-fixed">
-          <thead>
-            <tr className="bg-gray-100 text-gray-700">
-              <th className="py-3 px-4 text-left">Date</th>
-              <th className="py-3 px-4 text-left">Purok</th>
-              <th className="py-3 px-4 text-left">Time</th>
-              <th className="py-3 px-4 text-left">Plan</th>
-              <th className="py-3 px-4 text-left">Waste Type</th>
-              <th className="py-3 px-4 text-left">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {filteredSchedules.length > 0 ? (
-              filteredSchedules.map((sched) => {
-                const id =
-                  sched.schedule_id ?? sched.id ?? `${sched.date}-${sched.purok}`;
-                const planValue = String(sched.plan || "").trim();
-                const statusValue = String(sched.status || "not-started").trim();
-                const badgeClass =
-                  statusColors[statusValue] || "bg-gray-100 text-gray-700";
-
-                return (
-                  <tr key={id} className="hover:bg-gray-50">
-                    <td className="py-3 px-4">{formatDate(sched.date, sched.day)}</td>
-                    <td className="py-3 px-4">Purok {sched.purok}</td>
-                    <td className="py-3 px-4">
-                      {formatTime(sched.start_time)} - {formatTime(sched.end_time)}
-                    </td>
-                    <td className="py-3 px-4">{planValue}</td>
-                    <td className="py-3 px-4">{sched.waste_type}</td>
-                    <td className="py-3 px-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${badgeClass}`}>
-                        {statusLabel(statusValue)}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })
-            ) : (
-              <tr>
-                <td colSpan={6} className="py-6 text-center text-gray-400 text-base">
-                  No schedules available
-                </td>
+        <div className="overflow-x-auto w-full">
+          <table className="min-w-full text-sm table-auto">
+            <thead>
+              <tr className="bg-gray-100 text-gray-700">
+                <th className="py-3 px-4 text-left whitespace-nowrap">Date</th>
+                <th className="py-3 px-4 text-left whitespace-nowrap">Purok</th>
+                <th className="py-3 px-4 text-left whitespace-nowrap">Time</th>
+                <th className="py-3 px-4 text-left whitespace-nowrap">Plan</th>
+                <th className="py-3 px-4 text-left whitespace-nowrap">Waste Type</th>
+                <th className="py-3 px-4 text-left whitespace-nowrap">Status</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredSchedules.length > 0 ? (
+                filteredSchedules.map((sched) => {
+                  const id =
+                    sched.schedule_id ?? sched.id ?? `${sched.date}-${sched.purok}`;
+                  const planValue = String(sched.plan || "").trim();
+                  const statusValue = String(sched.status || "not-started").trim();
+                  const badgeClass =
+                    statusColors[statusValue] || "bg-gray-100 text-gray-700";
+
+                  return (
+                    <tr key={id} className="hover:bg-gray-50">
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        {formatDate(sched.date, sched.day)}
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">Purok {sched.purok}</td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        {formatTime(sched.start_time)} - {formatTime(sched.end_time)}
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">{planValue}</td>
+                      <td className="py-3 px-4 whitespace-nowrap">{sched.waste_type}</td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${badgeClass}`}
+                        >
+                          {statusLabel(statusValue)}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="py-6 text-center text-gray-400 text-base"
+                  >
+                    No schedules available
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-lg w-full p-6 space-y-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-lg w-full p-6 space-y-4 overflow-y-auto max-h-[90vh]">
             <h3 className="text-lg font-semibold text-red-600">Add New Schedule</h3>
             <form onSubmit={handleAddSchedule} className="space-y-3">
               <input
@@ -322,19 +323,19 @@ export default function Schedule() {
                   </option>
                 ))}
               </select>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="time"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
-                  className="w-1/2 border p-2 rounded"
+                  className="w-full sm:w-1/2 border p-2 rounded"
                   required
                 />
                 <input
                   type="time"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
-                  className="w-1/2 border p-2 rounded"
+                  className="w-full sm:w-1/2 border p-2 rounded"
                   required
                 />
               </div>
@@ -358,7 +359,9 @@ export default function Schedule() {
                 <option value="Non-Recyclable Materials">🗑️ Non-Recyclable Materials</option>
               </select>
               <div>
-                <label className="block mb-1 text-sm">Pick Route (click start and end)</label>
+                <label className="block mb-1 text-sm">
+                  Pick Route (click start and end)
+                </label>
                 <MapContainer
                   center={[8.228, 124.245]}
                   zoom={13}

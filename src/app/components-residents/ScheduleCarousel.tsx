@@ -147,7 +147,7 @@ export default function ScheduleCarousel() {
   const wasteColor = (type?: string) => {
     if (!type) return "bg-gray-200 text-gray-700";
     if (type.includes("Recyclable")) return "bg-green-600 text-white";
-    if (type.includes("Toxic")) return "bg-yellow-500 text-black";
+    if (type.includes("Toxic")) return "bg-yellow-400 text-white";
     if (type.includes("Non-Recyclable")) return "bg-red-600 text-white";
     return "bg-gray-200 text-gray-700";
   };

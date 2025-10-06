@@ -149,27 +149,27 @@ export default function Education() {
   };
 
   return (
-    <div className="text-gray-800">
-      <div className="p-6 max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
+    <div className="text-gray-800 min-h-screen py-8 ">
+      <div className="px-4 sm:px-6 max-w-5xl mx-auto">
+        {/* Header Buttons Section */}
+        <div className="grid grid-cols-2 gap-3 sm:flex sm:justify-between sm:items-center mb-8">
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 bg-green-600 text-white px-5 py-2 rounded-lg shadow hover:bg-green-700 transition"
+            className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 sm:px-5 sm:py-2 rounded-lg shadow hover:bg-green-700 transition justify-center text-sm sm:text-base"
           >
-            <Plus className="w-5 h-5" /> Add Content
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" /> Add Content
           </button>
           <button
             onClick={() => setShowArchived(!showArchived)}
-            className="flex items-center gap-2 px-5 py-2 rounded-lg border border-gray-200 shadow-sm hover:bg-gray-100 transition"
+            className="flex items-center gap-2 px-3 py-2 sm:px-5 sm:py-2 rounded-lg border border-gray-300 bg-white shadow-sm hover:bg-gray-50 transition justify-center text-sm sm:text-base text-gray-700"
           >
             {showArchived ? (
               <>
-                <RotateCcw className="w-5 h-5 text-green-600" /> Back to Published
+                <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" /> Back
               </>
             ) : (
               <>
-                <Archive className="w-5 h-5 text-gray-600" /> View Archived
+                <Archive className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" /> Archived
               </>
             )}
           </button>
@@ -178,36 +178,36 @@ export default function Education() {
         {/* Content Section */}
         {!showArchived ? (
           <>
-            <h2 className="text-xl font-semibold mb-5 flex items-center gap-2 text-green-700">
+            <h2 className="text-xl font-semibold mb-5 flex items-center gap-2 text-black">
               <BookOpen className="w-5 h-5" /> Published
             </h2>
             <div className="grid gap-4">
               {contents.length === 0 ? (
-                <p className="text-gray-500">No published content.</p>
+                <p className="text-gray-500 text-center py-4">No published content yet.</p>
               ) : (
                 contents.map((content) => (
                   <motion.div
                     key={content.id}
                     whileHover={{ scale: 1.01 }}
-                    className="p-5 rounded-xl shadow border border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center"
+                    className="p-5 rounded-xl shadow-md bg-white border border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center transition hover:shadow-lg"
                   >
                     <div>
-                      <h3 className="font-medium text-gray-900">{content.title}</h3>
+                      <h3 className="font-semibold text-gray-900">{content.title}</h3>
                       <p className="text-sm text-gray-600 mt-1 line-clamp-2">
                         {content.description}
                       </p>
-                      <div className="flex gap-2 mt-2 text-xs">
+                      <div className="flex flex-wrap gap-2 mt-2 text-xs">
                         <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full">
                           {content.category}
                         </span>
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full">
                           {content.audience}
                         </span>
                       </div>
                     </div>
                     <button
                       onClick={() => handleArchive(content)}
-                      className="mt-3 sm:mt-0 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg shadow flex items-center gap-2"
+                      className="mt-3 sm:mt-0 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow flex items-center gap-2 text-sm"
                     >
                       <Archive className="w-4 h-4" /> Archive
                     </button>
@@ -218,36 +218,36 @@ export default function Education() {
           </>
         ) : (
           <>
-            <h2 className="text-xl font-semibold mb-5 flex items-center gap-2 text-green-700">
+            <h2 className="text-xl font-semibold mb-5 flex items-center gap-2 text-black-700">
               <Layers className="w-5 h-5" /> Archived
             </h2>
             <div className="grid gap-4">
               {archived.length === 0 ? (
-                <p className="text-gray-500">No archived content.</p>
+                <p className="text-gray-500 text-center py-4">No archived content.</p>
               ) : (
                 archived.map((content) => (
                   <motion.div
                     key={content.id}
                     whileHover={{ scale: 1.01 }}
-                    className="p-5 rounded-xl shadow border border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center"
+                    className="p-5 rounded-xl shadow-md bg-white border border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center transition hover:shadow-lg"
                   >
                     <div>
-                      <h3 className="font-medium text-gray-900">{content.title}</h3>
+                      <h3 className="font-semibold text-gray-900">{content.title}</h3>
                       <p className="text-sm text-gray-600 mt-1 line-clamp-2">
                         {content.description}
                       </p>
-                      <div className="flex gap-2 mt-2 text-xs">
+                      <div className="flex flex-wrap gap-2 mt-2 text-xs">
                         <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full">
                           {content.category}
                         </span>
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full">
                           {content.audience}
                         </span>
                       </div>
                     </div>
                     <button
                       onClick={() => handleRestore(content)}
-                      className="mt-3 sm:mt-0 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow flex items-center gap-2"
+                      className="mt-3 sm:mt-0 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow flex items-center gap-2 text-sm"
                     >
                       <RotateCcw className="w-4 h-4" /> Restore
                     </button>
@@ -266,7 +266,7 @@ export default function Education() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 p-4"
+            className="fixed inset-0 flex items-center justify-center z-50 bg-black/40 p-4"
           >
             <motion.div
               initial={{ y: -30, opacity: 0 }}
@@ -306,9 +306,9 @@ export default function Education() {
                 <input
                   type="file"
                   onChange={handleFileUpload}
-                  className="w-full text-sm file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-green-100 file:text-green-700 hover:file:bg-green-200"
+                  className="w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-green-100 file:text-green-700 hover:file:bg-green-200"
                 />
-                <label className="flex items-center gap-2 text-sm text-gray-600">
+                <label className="flex items-center gap-2 text-sm text-gray-700">
                   <input
                     type="checkbox"
                     checked={formData.publishNow}
