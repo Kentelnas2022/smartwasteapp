@@ -1,0 +1,37 @@
+{
+  "name": "wasteapp",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build --turbopack",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@headlessui/react": "^2.2.7",
+    "@heroicons/react": "^2.2.0",
+    "@supabase/supabase-js": "^2.57.2",
+    "chart.js": "^4.5.0",
+    "framer-motion": "^12.23.12",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^0.541.0",
+    "next": "15.5.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-leaflet": "^5.0.0",
+    "recharts": "^3.1.2",
+    "sonner": "^2.0.7",
+    "sweetalert2": "^11.23.0",
+    "swiper": "^11.2.10"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.12",
+    "typescript": "^5"
+  }
+}
