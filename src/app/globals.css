@@ -1,17 +1,21 @@
+/* Import Tailwind core utilities */
 @import "tailwindcss";
 
+/* ========================================
+   Root Theme Variables
+   ======================================== */
 :root {
+  /* Base Colors */
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Custom Project Colors (from index.html) */
+  --dark-red: #8B0000;
+  --medium-red: #DC143C;
+  --light-red: #FF6B6B;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
+/* Light/Dark Mode */
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
@@ -19,8 +23,100 @@
   }
 }
 
+/* ========================================
+   Tailwind Theme Extension (inline)
+   ======================================== */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  /* Custom reds used in Navbar and buttons */
+  --color-dark-red: var(--dark-red);
+  --color-medium-red: var(--medium-red);
+  --color-light-red: var(--light-red);
+
+  /* Font families */
+  --font-sans: var(--font-geist-sans, Arial, sans-serif);
+  --font-mono: var(--font-geist-mono, monospace);
+}
+
+/* ========================================
+   Base Styles
+   ======================================== */
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ========================================
+   Navbar & Color Utility Classes
+   ======================================== */
+.bg-dark-red {
+  background-color: var(--dark-red);
+}
+.bg-medium-red {
+  background-color: var(--medium-red);
+}
+.bg-light-red {
+  background-color: var(--light-red);
+}
+
+.text-dark-red {
+  color: var(--dark-red);
+}
+.text-medium-red {
+  color: var(--medium-red);
+}
+.text-light-red {
+  color: var(--light-red);
+}
+
+.border-dark-red {
+  border-color: var(--dark-red);
+}
+.border-medium-red {
+  border-color: var(--medium-red);
+}
+.border-light-red {
+  border-color: var(--light-red);
+}
+
+/* ========================================
+   Animations
+   ======================================== */
+
+/* Fade-in animation (used for content transitions) */
+.fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Slide-down animation (used for dropdown menus) */
+.animate-slideDown {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

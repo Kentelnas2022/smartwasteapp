@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/supabaseClient";
-import { Paperclip, MessageSquare, CheckCircle, Star, Eye } from "lucide-react";
+import { Paperclip, MessageSquare, CheckCircle, Star, Eye, MapPin } from "lucide-react";
 
 export default function Reports() {
   const [reports, setReports] = useState([]);
@@ -91,6 +91,7 @@ export default function Reports() {
       file_urls,
       status: r.status || "Pending",
       official_response: r.official_response || "",
+      location: r.location || "No location specified",
     };
   };
 
@@ -99,7 +100,7 @@ export default function Reports() {
 
     const { data: reportsData, error } = await supabase
       .from("reports")
-      .select("id, title, description, file_urls, created_at, user_id")
+      .select("id, title, description, file_urls, created_at, user_id, location")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -175,6 +176,7 @@ export default function Reports() {
             status: nextStatus,
             official_response: report.draftResponse || report.official_response,
             updated_by: user.id,
+            location: report.location, // ✅ Track location in report_status
           },
           { onConflict: "report_id" }
         )
@@ -191,16 +193,19 @@ export default function Reports() {
 
       if (report.user_id) {
         const notifMessage = resolve
-          ? ` Your report has been marked as resolved${
+          ? `Your report from ${report.location} has been marked as resolved${
               updated?.official_response ? `: ${updated.official_response}` : "."
             }`
-          : `📝 Official responded: ${updated?.official_response}`;
-        await supabase.from("notifications").insert([{
-          report_id: report.id,
-          user_id: report.user_id,
-          message: notifMessage,
-          read: false,
-        }]);
+          : ` Official responded to your report from ${report.location}: ${updated?.official_response}`;
+        await supabase.from("notifications").insert([
+  {
+    report_id: report.id,
+    user_id: report.user_id,
+    message: notifMessage,
+    read: false,
+    status: resolve ? "Resolved" : "Responded",
+  },
+]);
       }
     } catch (err) {
       console.error("❌ handleRespond error:", err.message || err);
@@ -261,6 +266,11 @@ export default function Reports() {
               </h3>
               <p className="text-sm text-gray-500 mt-1">
                 Submitted on {new Date(report.created_at).toLocaleString()}
+              </p>
+              {/* ✅ Show Location */}
+              <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
+                <MapPin size={14} className="text-red-500" />
+                {report.location}
               </p>
             </div>
             <span
