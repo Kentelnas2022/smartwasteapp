@@ -319,11 +319,22 @@ export default function Education() {
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 >
-                  <option value="">Select Category</option>
-                  <option value="Waste Segregation">Waste Segregation</option>
-                  <option value="Recycling">Recycling</option>
-                  <option value="Composting">Composting</option>
-                  <option value="Waste Reduction">Waste Reduction</option>
+                                <option value="">Select Category</option>
+                <option value="Waste Segregation">Waste Segregation</option>
+                <option value="Recycling">Recycling</option>
+                <option value="Composting">Composting</option>
+                <option value="Waste Reduction">Waste Reduction</option>
+                <option value="Hazardous Waste">Hazardous Waste</option>
+                <option value="Proper Disposal">Proper Disposal</option>
+                <option value="Plastic Waste Management">Plastic Waste Management</option>
+                <option value="E-Waste Management">E-Waste Management</option>
+                <option value="Water Conservation">Water Conservation</option>
+                <option value="Clean Community Practices">Clean Community Practices</option>
+                <option value="Environmental Awareness">Environmental Awareness</option>
+                <option value="Sustainable Living">Sustainable Living</option>
+                <option value="Health and Safety">Health and Safety</option>
+                <option value="Waste Collection Etiquette">Waste Collection Etiquette</option>
+
                 </select>
                 <textarea
                   placeholder="Description"

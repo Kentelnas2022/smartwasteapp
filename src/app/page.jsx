@@ -19,13 +19,31 @@ export default function Home() {
 
   useEffect(() => {
     const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData?.session;
+
+      // If no session, redirect to login
+      if (!session) {
+        router.push("/login");
+        return;
+      }
+
+      // Check if user exists in 'officials' table
+      const { data: official, error } = await supabase
+        .from("officials")
+        .select("user_id")
+        .eq("user_id", session.user.id)
+        .single();
+
+      if (error || !official) {
+        // Not authorized
+        await supabase.auth.signOut();
         router.push("/login");
       } else {
         setLoading(false);
       }
     };
+
     checkSession();
   }, [router]);
 

@@ -2,11 +2,11 @@
 import { useState, useEffect } from "react";
 import Navbar from "../components-residents/Navbar";
 import GreetingCard from "../components-residents/GreetingCard";
-import ScheduleSection from "../components-residents/ScheduleSection";
-import EducationSection from "../components-residents/EducationSection";
+import ScheduleAndEducationSection from "../components-residents/ScheduleAndEducationSection";
 import ReportModal from "../components-residents/ReportModal";
 import FeedbackModal from "../components-residents/FeedbackModal";
 import { supabase } from "@/supabaseClient";
+import Spinner from "../Spinner"; // Ensure the correct import path
 
 export default function ResidentsPage() {
   const [view, setView] = useState("schedule");
@@ -14,19 +14,24 @@ export default function ResidentsPage() {
   const [showFeedback, setShowFeedback] = useState(false);
   const [user, setUser] = useState(null);
   const [resolvedReport, setResolvedReport] = useState(null);
+  const [loading, setLoading] = useState(true); // Loading state
 
   useEffect(() => {
     const checkResolvedReports = async () => {
       try {
-        // ✅ Get logged-in user
         const {
           data: { user },
+          error: userError,
         } = await supabase.auth.getUser();
+
+        if (userError) {
+          console.error("Error getting user:", userError.message);
+          return;
+        }
         if (!user) return;
 
         setUser(user);
 
-        // ✅ Fetch user's latest resolved report
         const { data: reports, error } = await supabase
           .from("report_status")
           .select(`
@@ -50,34 +55,38 @@ export default function ResidentsPage() {
         if (reports && reports.length > 0) {
           const latestResolved = reports[0];
 
-          // ✅ Check if feedback already exists for this report
-          const { data: existingFeedback, error: feedbackError } = await supabase
-            .from("feedback")
+          const { data: existingRating, error: ratingError } = await supabase
+            .from("ratings")
             .select("id")
-            .eq("report_id", latestResolved.report_id)
             .eq("user_id", latestResolved.reports.user_id)
+            .eq("report_id", latestResolved.report_id)
             .maybeSingle();
 
-          if (feedbackError && feedbackError.message) {
-            console.error("Error checking feedback:", feedbackError.message);
+          if (ratingError && ratingError.message) {
+            console.error("Error checking rating:", ratingError.message);
             return;
           }
 
-          const feedbackExists = existingFeedback && Object.keys(existingFeedback).length > 0;
+          const ratingExists = existingRating && Object.keys(existingRating).length > 0;
 
-          // ✅ Only show feedback modal if no feedback exists
-          if (!feedbackExists) {
+          if (!ratingExists) {
             setResolvedReport(latestResolved);
             setShowFeedback(true);
           }
         }
       } catch (err) {
         console.error("Error checking resolved reports:", err);
+      } finally {
+        setLoading(false); // Set loading to false after data is fetched
       }
     };
 
     checkResolvedReports();
   }, []);
+
+  if (loading) {
+    return <Spinner />; // Show the spinner while loading
+  }
 
   return (
     <div className="bg-gray-100 min-h-screen">
@@ -85,38 +94,33 @@ export default function ResidentsPage() {
       <Navbar
         onOpenReport={() => setIsReportOpen(true)}
         onOpenSchedule={() => setView("schedule")}
-        onOpenEducation={() => setView("education")}
       />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-6 fade-in">
         <GreetingCard />
 
+        {/* Combined Schedule + Education Section */}
         <div id="contentArea">
-          {view === "schedule" ? <ScheduleSection /> : <EducationSection />}
+          <ScheduleAndEducationSection view={view} />
         </div>
       </main>
 
+      {/* Report Modal */}
       <ReportModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} />
 
-      {/* ✅ FIXED — Pass correct IDs */}
+      {/* Feedback Modal */}
       {showFeedback && resolvedReport && (
         <FeedbackModal
           isOpen={showFeedback}
           onClose={() => setShowFeedback(false)}
-          user={{
-            id: resolvedReport.reports.user_id, // ✅ correct
-          }}
-          report={{
-            report_id: resolvedReport.report_id,
-            reports: resolvedReport.reports,
-            official_response: resolvedReport.official_response,
-          }}
+          reportId={resolvedReport.report_id}
+          userId={resolvedReport.reports.user_id}
         />
       )}
 
       {/* Debug */}
-      {console.log("✅ Passing to FeedbackModal:", {
+      {console.log("Passing to FeedbackModal:", {
         user_id: resolvedReport?.reports?.user_id,
         report_id: resolvedReport?.report_id,
       })}

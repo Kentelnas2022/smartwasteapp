@@ -5,7 +5,7 @@ import { supabase } from "@/supabaseClient";
 import { useRouter } from "next/navigation";
 import Swal from "sweetalert2";
 
-export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }) {
+export default function Navbar({ onOpenSchedule, onOpenReport,}) {
   const [open, setOpen] = useState(false);
   const [activePage, setActivePage] = useState("");
   const [notifications, setNotifications] = useState([]);
@@ -15,37 +15,37 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
   const router = useRouter();
   const channelRef = useRef(null);
 
-  // ✅ Fetch logged-in user info and notifications
+  // ✅ Fetch user + notifications once
   useEffect(() => {
-    const fetchUserAndNotifications = async () => {
+    const init = async () => {
       const { data, error } = await supabase.auth.getUser();
       if (error) {
-        console.error("User fetch error:", error.message);
+        console.error("Auth fetch error:", error.message);
         return;
       }
 
       const currentUser = data?.user;
+      if (!currentUser) return;
+
       setUser(currentUser);
+      setUserEmail(currentUser.email || "Unknown User");
 
-      if (currentUser) {
-        setUserEmail(currentUser.email || "Unknown User");
+      // Fetch avatar
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("avatar_url")
+        .eq("id", currentUser.id)
+        .single();
 
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("avatar_url")
-          .eq("id", currentUser.id)
-          .single();
+      if (profile?.avatar_url) setUserAvatar(profile.avatar_url);
 
-        if (profile?.avatar_url) setUserAvatar(profile.avatar_url);
-
-        await fetchNotifications(currentUser.id);
-        subscribeToNotifications(currentUser.id);
-      }
+      // Fetch and subscribe
+      await fetchNotifications(currentUser.id);
+      subscribeToNotifications(currentUser.id);
     };
 
-    fetchUserAndNotifications();
+    init();
 
-    // Cleanup realtime channel on unmount
     return () => {
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
@@ -54,9 +54,8 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
     };
   }, []);
 
-  // ✅ Fetch notifications from DB (once)
+  // ✅ Fetch all notifications
   const fetchNotifications = async (uid) => {
-    if (!uid) return;
     const { data, error } = await supabase
       .from("notifications")
       .select("*")
@@ -67,12 +66,12 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
     else setNotifications(data || []);
   };
 
-  // ✅ Realtime subscription (single instance)
+  // ✅ Real-time subscription (INSERT, UPDATE, DELETE)
   const subscribeToNotifications = (uid) => {
-    if (channelRef.current) return; // avoid duplicate subscriptions
+    if (channelRef.current) return;
 
     channelRef.current = supabase
-      .channel(`notifications-${uid}`)
+      .channel(`realtime-notifications-${uid}`)
       .on(
         "postgres_changes",
         {
@@ -81,46 +80,43 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
           table: "notifications",
           filter: `user_id=eq.${uid}`,
         },
-        (payload) => {
-          const notif = payload.new;
-          const old = payload.old;
+        async (payload) => {
+          const newNotif = payload.new;
+          const oldNotif = payload.old;
 
           switch (payload.eventType) {
             case "INSERT":
               setNotifications((prev) => {
-                const exists = prev.some((n) => n.id === notif.id);
+                const exists = prev.some((n) => n.id === newNotif.id);
                 if (exists) return prev;
                 Swal.fire({
                   icon: "info",
                   title: "New Notification",
-                  text: notif.message,
+                  text: newNotif.message,
                   timer: 2500,
                   showConfirmButton: false,
                 });
-                return [notif, ...prev];
+                return [newNotif, ...prev];
               });
               break;
 
             case "UPDATE":
               setNotifications((prev) =>
-                prev.map((n) => (n.id === notif.id ? notif : n))
+                prev.map((n) => (n.id === newNotif.id ? newNotif : n))
               );
               Swal.fire({
                 icon: "success",
                 title: "Notification Updated",
-                text: notif.official_response
-                  ? `Response: ${notif.official_response}`
-                  : `Status changed to ${notif.status}`,
+                text: newNotif.official_response
+                  ? `Response: ${newNotif.official_response}`
+                  : `Status changed to ${newNotif.status}`,
                 timer: 2500,
                 showConfirmButton: false,
               });
               break;
 
             case "DELETE":
-              setNotifications((prev) => prev.filter((n) => n.id !== old.id));
-              break;
-
-            default:
+              setNotifications((prev) => prev.filter((n) => n.id !== oldNotif.id));
               break;
           }
         }
@@ -128,19 +124,28 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
       .subscribe();
   };
 
-  // ✅ Mark all as read
+  // ✅ Mark all notifications as read
   const markAllAsRead = async () => {
     if (!notifications.length) {
       Swal.fire("No new notifications", "You're all caught up!", "info");
       return;
     }
 
-    await supabase.from("notifications").update({ read: true }).eq("user_id", user.id);
+    const { error } = await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error(error.message);
+      return;
+    }
+
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     Swal.fire("Done!", "All notifications marked as read.", "success");
   };
 
-  // ✅ Clear all notifications (no re-fetch)
+  // ✅ Clear all notifications (real-time delete)
   const clearAllNotifications = async () => {
     if (!notifications.length) {
       Swal.fire("Nothing to clear", "", "info");
@@ -149,20 +154,31 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
 
     const confirm = await Swal.fire({
       title: "Clear all notifications?",
-      text: "This cannot be undone.",
+      text: "This will permanently delete all your notifications.",
       icon: "warning",
       showCancelButton: true,
-      confirmButtonText: "Yes, clear all",
+      confirmButtonText: "Yes, delete all",
+      cancelButtonText: "Cancel",
     });
 
-    if (confirm.isConfirmed) {
-      await supabase.from("notifications").delete().eq("user_id", user.id);
-      setNotifications([]);
-      Swal.fire("Cleared!", "All notifications removed.", "success");
+    if (!confirm.isConfirmed) return;
+
+    const { error } = await supabase
+      .from("notifications")
+      .delete()
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Delete error:", error.message);
+      Swal.fire("Error", "Failed to delete notifications.", "error");
+      return;
     }
+
+    setNotifications([]);
+    Swal.fire("Cleared!", "All notifications deleted permanently.", "success");
   };
 
-  // ✅ Display notifications
+  // ✅ Show notification modal
   const showNotifications = () => {
     if (!notifications.length) {
       Swal.fire("No Notifications", "You're all caught up!", "info");
@@ -178,14 +194,15 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
             <p>Status: <b>${n.status}</b></p>
             ${n.official_response ? `<p>Response: ${n.official_response}</p>` : ""}
             <small>${date}</small>
-          </div>`;
+          </div>
+        `;
       })
       .join("");
 
     Swal.fire({
       title: "Notifications",
       html,
-      width: 420,
+      width: 400,
       showDenyButton: true,
       showCancelButton: true,
       confirmButtonText: "Mark All as Read",
@@ -197,6 +214,7 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
     });
   };
 
+  // ✅ Real-time unread count
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   // ✅ Logout
@@ -211,14 +229,13 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
     email.length > 20 ? email.slice(0, 17) + "..." : email;
 
   const menuItems = [
-    { key: "schedule", label: "Collection Schedule", onClick: onOpenSchedule },
+    { key: "schedule", label: "Dashboard", onClick: onOpenSchedule },
     { key: "report", label: "Report Issue", onClick: onOpenReport },
-    { key: "education", label: "Education", onClick: onOpenEducation },
   ];
 
   return (
     <>
-      {/* NAVBAR */}
+      {/* 🔻 NAVBAR */}
       <nav className="bg-[#8B0000] text-white p-4 shadow-md sticky top-0 z-40">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <h1 className="text-lg font-semibold">Residents Dashboard</h1>
@@ -244,7 +261,7 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
               )}
             </button>
 
-            {/* 🍔 Menu Button */}
+            {/* 🍔 Sidebar Menu Button */}
             <button onClick={() => setOpen(true)} className="p-2 rounded-full hover:bg-[#a30000]">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -254,7 +271,7 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
         </div>
       </nav>
 
-      {/* SIDEBAR MENU */}
+      {/* 🔻 SIDEBAR MENU */}
       <div
         className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-50 transition-opacity duration-300 ${
           open ? "opacity-100 visible" : "opacity-0 invisible"
@@ -294,7 +311,7 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
                   onClick={() => {
                     item.onClick?.();
                     setActivePage(item.key);
-                    setOpen(false); 
+                    setOpen(false);
                   }}
                   className={`block w-full text-left px-6 py-3 font-medium ${
                     activePage === item.key

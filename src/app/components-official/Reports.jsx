@@ -280,6 +280,37 @@ export default function Reports() {
     }
   };
 
+  // ✅ Archive a report
+  const archiveReport = async (report) => {
+    try {
+      const { error: insertError } = await supabase.from("archive").insert([
+        {
+          report_id: report.id,
+          title: report.title,
+          description: report.description,
+          status: report.status,
+          file_urls: report.file_urls,
+          official_response: report.official_response,
+          created_at: report.created_at,
+          archived_at: new Date().toISOString(),
+        },
+      ]);
+
+      if (insertError) throw insertError;
+
+      const { error: deleteError } = await supabase
+        .from("reports")
+        .delete()
+        .eq("id", report.id);
+
+      if (deleteError) throw deleteError;
+
+      fetchReports();
+    } catch (error) {
+      console.error("❌ Error archiving report:", error.message);
+    }
+  };
+
   if (loading)
     return <div className="p-6 text-center text-gray-500">Loading reports...</div>;
 
@@ -354,7 +385,7 @@ export default function Reports() {
             </div>
           )}
 
-          {/* ✅ Action buttons */}
+          {/* Action buttons */}
           <div className="mt-4 flex gap-3 flex-wrap">
             {report.status === "Pending" && (
               <button
@@ -380,9 +411,18 @@ export default function Reports() {
                   : "Mark Resolved"}
               </button>
             )}
+
+            {/* Archive button */}
+            <button
+              onClick={() => archiveReport(report)}
+              className="flex items-center gap-1 px-3 py-2 text-sm rounded-lg bg-gray-500 text-white hover:bg-gray-600"
+            >
+              <Eye size={16} />
+              Archive
+            </button>
           </div>
 
-          {/* ✅ Comment box */}
+          {/* Comment box */}
           {activeComment === report.id && (
             <div className="mt-3">
               <textarea
