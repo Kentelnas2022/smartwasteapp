@@ -3,11 +3,59 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
 import { XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Polyline,
+  useMapEvents,
+} from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { supabase } from "@/supabaseClient";
+
+// ✅ Fix Leaflet marker icons
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+});
+
+// ✅ Map click handler for setting 2 markers
+function LocationPicker({ routePoints, setRoutePoints }) {
+  useMapEvents({
+    click(e) {
+      if (routePoints.length < 2) {
+        setRoutePoints([...routePoints, [e.latlng.lat, e.latlng.lng]]);
+      } else {
+        setRoutePoints([routePoints[0], [e.latlng.lat, e.latlng.lng]]);
+      }
+    },
+  });
+  return null;
+}
 
 export function StatusModal({ purok, onClose, onUpdate }) {
   const [status, setStatus] = useState(purok?.status || "not-started");
-  const [notes, setNotes] = useState(purok?.notes || "");
+  const [routePoints, setRoutePoints] = useState(() => {
+    try {
+      if (!purok) return [];
+      if (typeof purok.route_points === "string") {
+        return JSON.parse(purok.route_points || "[]");
+      }
+      if (Array.isArray(purok.route_points)) return purok.route_points;
+      if (Array.isArray(purok.planA_points)) return purok.planA_points;
+      if (Array.isArray(purok.planB_points)) return purok.planB_points;
+      return [];
+    } catch {
+      return [];
+    }
+  });
+
   const [isUpdating, setIsUpdating] = useState(false);
+  const [plan, setPlan] = useState(purok?.plan || "A");
 
   if (!purok) return null;
 
@@ -17,30 +65,52 @@ export function StatusModal({ purok, onClose, onUpdate }) {
     { value: "completed", label: "Completed", color: "green" },
   ];
 
+  // ✅ handle update button click (status/plan/routes)
   const handleUpdateClick = async () => {
     setIsUpdating(true);
-
     try {
-      // Call your update function
-      await onUpdate({ ...purok, status, notes });
+      const payload = {
+        status,
+        plan,
+        route_points: routePoints,
+      };
 
-      // Show success alert
+      const identifier = purok.schedule_id ?? purok.id;
+      console.log("Updating schedule:", identifier, payload);
+
+      const { data, error } = await supabase
+        .from("schedules")
+        .update(payload)
+        .eq("schedule_id", identifier)
+        .select();
+
+      if (error) throw error;
+      if (!data || data.length === 0)
+        throw new Error("No matching schedule found. Check schedule_id.");
+
+      if (typeof onUpdate === "function") {
+        const updated = data[0] || { ...purok, ...payload };
+        onUpdate(updated);
+      }
+
       Swal.fire({
         title: "Status Updated!",
-        text: `${purok.purok} has been successfully updated.`,
+        text:
+          plan === "B"
+            ? `${purok.purok} Plan B route saved successfully.`
+            : `${purok.purok} Plan A updated successfully.`,
         icon: "success",
-        confirmButtonColor: "#7f1d1d", // red-900
+        confirmButtonColor: "#7f1d1d",
         background: "#fff",
         color: "#000",
-        confirmButtonText: "OK",
       });
 
       onClose();
     } catch (error) {
-      console.error(error);
+      console.error("Update error:", error);
       Swal.fire({
         title: "Update Failed",
-        text: "There was an issue updating the status. Please try again.",
+        text: error.message || "There was an issue updating the schedule.",
         icon: "error",
         confirmButtonColor: "#7f1d1d",
         background: "#fff",
@@ -48,6 +118,58 @@ export function StatusModal({ purok, onClose, onUpdate }) {
       });
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  // ✅ handle plan switch + Supabase update
+  const handlePlanSwitch = async (newPlan) => {
+    try {
+      setPlan(newPlan);
+
+      if (newPlan === "B" && Array.isArray(purok?.planB_points)) {
+        setRoutePoints(purok.planB_points);
+      } else if (newPlan === "A" && Array.isArray(purok?.planA_points)) {
+        setRoutePoints(purok.planA_points);
+      } else if (Array.isArray(purok?.route_points)) {
+        setRoutePoints(purok.route_points);
+      } else {
+        setRoutePoints([]);
+      }
+
+      const identifier = purok.schedule_id ?? purok.id;
+      console.log("Updating plan for schedule:", identifier, "->", newPlan);
+
+      const { data, error } = await supabase
+        .from("schedules")
+        .update({ plan: newPlan })
+        .eq("schedule_id", identifier)
+        .select();
+
+      if (error) throw error;
+      if (!data || data.length === 0)
+        throw new Error(
+          `No record updated. Check if schedule_id '${identifier}' exists or if RLS allows update.`
+        );
+
+      console.log("Plan successfully changed:", data);
+
+      Swal.fire({
+        title: "Plan Changed",
+        text: `Switched to Plan ${newPlan} successfully.`,
+        icon: "success",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (error) {
+      console.error("Plan change error:", error);
+      Swal.fire({
+        title: "Plan Change Failed",
+        text: error.message || "Unexpected error occurred during plan change.",
+        icon: "error",
+        confirmButtonColor: "#7f1d1d",
+        background: "#fff",
+        color: "#000",
+      });
     }
   };
 
@@ -115,16 +237,68 @@ export function StatusModal({ purok, onClose, onUpdate }) {
             </div>
           </div>
 
-          {/* Notes */}
+          {/* Plan Selector */}
           <div>
-            <p className="text-sm font-semibold text-black mb-2">Notes</p>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows="4"
-              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm text-black focus:ring-2 focus:ring-red-900 focus:border-red-900 placeholder-gray-400 resize-none"
-              placeholder="Add remarks about this purok..."
-            />
+            <p className="text-sm font-semibold text-black mb-3">
+              Select Route Plan
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {["A", "B"].map((p) => (
+                <button
+                  key={p}
+                  onClick={() => handlePlanSwitch(p)}
+                  className={`flex items-center justify-center py-3 rounded-xl border text-sm font-medium transition-all duration-200 ${
+                    plan === p
+                      ? "border-red-600 bg-red-50 text-red-700 ring-1 ring-red-200"
+                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  Plan {p}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Choose Plan B for alternate routes during roadworks or detours.
+            </p>
+          </div>
+
+          {/* Route Map */}
+          <div>
+            <p className="text-sm font-semibold text-black mb-2">Route Map</p>
+            <MapContainer
+              center={routePoints[0] || [8.228, 124.245]}
+              zoom={13}
+              style={{
+                height: "200px",
+                width: "100%",
+                borderRadius: "10px",
+              }}
+            >
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              <LocationPicker
+                routePoints={routePoints}
+                setRoutePoints={setRoutePoints}
+              />
+              {routePoints.map((pos, i) => (
+                <Marker key={i} position={pos} />
+              ))}
+
+              {Array.isArray(purok?.planA_points) &&
+                purok.planA_points.length === 2 && (
+                  <Polyline positions={purok.planA_points} color="blue" />
+                )}
+              {Array.isArray(purok?.planB_points) &&
+                purok.planB_points.length === 2 && (
+                  <Polyline
+                    positions={purok.planB_points}
+                    color="orange"
+                    dashArray="6,6"
+                  />
+                )}
+            </MapContainer>
+            <p className="text-xs text-gray-500 mt-2">
+              Click twice to set start and end points.
+            </p>
           </div>
         </div>
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/supabaseClient";
-import { Archive, RotateCcw, BookOpen, Layers, Plus } from "lucide-react";
+import { Archive, RotateCcw, BookOpen, Layers, Plus, ExternalLink } from "lucide-react";
 import Swal from "sweetalert2";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -149,7 +149,7 @@ export default function Education() {
   };
 
   return (
-    <div className="text-gray-800 min-h-screen py-8 ">
+    <div className="text-gray-800 min-h-screen py-8">
       <div className="px-4 sm:px-6 max-w-5xl mx-auto">
         {/* Header Buttons Section */}
         <div className="grid grid-cols-2 gap-3 sm:flex sm:justify-between sm:items-center mb-8">
@@ -196,6 +196,20 @@ export default function Education() {
                       <p className="text-sm text-gray-600 mt-1 line-clamp-2">
                         {content.description}
                       </p>
+
+                      {/* Media Preview */}
+                      {content.media_url && (
+                        <a
+                          href={content.media_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 mt-2 text-green-600 hover:underline text-sm"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          View Uploaded File
+                        </a>
+                      )}
+
                       <div className="flex flex-wrap gap-2 mt-2 text-xs">
                         <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full">
                           {content.category}
@@ -218,7 +232,7 @@ export default function Education() {
           </>
         ) : (
           <>
-            <h2 className="text-xl font-semibold mb-5 flex items-center gap-2 text-black-700">
+            <h2 className="text-xl font-semibold mb-5 flex items-center gap-2 text-black">
               <Layers className="w-5 h-5" /> Archived
             </h2>
             <div className="grid gap-4">
@@ -236,6 +250,20 @@ export default function Education() {
                       <p className="text-sm text-gray-600 mt-1 line-clamp-2">
                         {content.description}
                       </p>
+
+                      {/* Media Preview for Archived */}
+                      {content.media_url && (
+                        <a
+                          href={content.media_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 mt-2 text-green-600 hover:underline text-sm"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          View Uploaded File
+                        </a>
+                      )}
+
                       <div className="flex flex-wrap gap-2 mt-2 text-xs">
                         <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full">
                           {content.category}

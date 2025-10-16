@@ -10,8 +10,8 @@ import {
   Clock,
   Inbox,
   MessageSquare,
-} from "lucide-react"; // modern icons
-import Swal from "sweetalert2"; // ✅ SweetAlert2
+} from "lucide-react";
+import Swal from "sweetalert2";
 
 export default function SMS() {
   const [recipientGroup, setRecipientGroup] = useState("all");
@@ -25,7 +25,6 @@ export default function SMS() {
   const [totalRecipients, setTotalRecipients] = useState(0);
   const [showArchive, setShowArchive] = useState(false);
 
-  // Load archive history & stats
   useEffect(() => {
     fetchHistory();
     fetchStats();
@@ -41,7 +40,6 @@ export default function SMS() {
     else console.error("Error fetching SMS history:", error);
   };
 
-  // ✅ Fetch statistics
   const fetchStats = async () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -60,7 +58,6 @@ export default function SMS() {
     setTotalRecipients(count || 0);
   };
 
-  // Archive message
   const archiveMessage = async (id) => {
     const result = await Swal.fire({
       title: "Archive Message?",
@@ -79,7 +76,6 @@ export default function SMS() {
     }
   };
 
-  // Restore message
   const restoreMessage = async (id) => {
     const result = await Swal.fire({
       title: "Restore Message?",
@@ -98,7 +94,6 @@ export default function SMS() {
     }
   };
 
-  // Templates
   const messageTemplates = {
     custom: "",
     collection:
@@ -123,7 +118,7 @@ export default function SMS() {
     setCharCount(e.target.value.length);
   };
 
-  // Submit SMS
+  // ✅ UPDATED HANDLE SUBMIT — now integrates EngageSpark API
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!message.trim()) {
@@ -131,34 +126,70 @@ export default function SMS() {
       return;
     }
 
-    const timestamp = new Date().toISOString();
+    try {
+      // ✅ 1. Send SMS using EngageSpark API
+      const testNumber = "+639924794425"; // <-- your phone number for testing
 
-    const { error } = await supabase.from("sms_archive").insert([
-      {
-        recipient_group: recipientGroup,
-        message_type: messageType,
-        message,
-        scheduled_for: schedule ? scheduleTime : null,
-        sent_at: timestamp,
-        archived: false,
-      },
-    ]);
+      const response = await fetch("pages/api/send-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: testNumber, message }),
+      });
 
-    if (error) {
-      console.error("Error archiving SMS:", error);
-      Swal.fire("Error", "Failed to archive SMS.", "error");
-      return;
+      const result = await response.json();
+
+      if (!result.success) {
+        Swal.fire(
+          "Error",
+          "Failed to send SMS via EngageSpark: " +
+            (result.error?.detail || JSON.stringify(result.error)),
+          "error"
+        );
+        return;
+      }
+
+      // ✅ 2. Archive SMS in Supabase
+      const timestamp = new Date().toISOString();
+      const { error } = await supabase.from("sms_archive").insert([
+        {
+          recipient_group: recipientGroup,
+          message_type: messageType,
+          message,
+          scheduled_for: schedule ? scheduleTime : null,
+          sent_at: timestamp,
+          archived: false,
+        },
+      ]);
+
+      if (error) {
+        console.error("Error archiving SMS:", error);
+        Swal.fire("Error", "Failed to archive SMS.", "error");
+        return;
+      }
+
+      // ✅ 3. Refresh UI
+      fetchHistory();
+      fetchStats();
+      setMessage("");
+      setCharCount(0);
+      setSchedule(false);
+      setScheduleTime("");
+      setMessageType("custom");
+
+      Swal.fire({
+        title: "✅ SMS Sent!",
+        html: `
+          <p>Message successfully sent via EngageSpark.</p>
+          <p><strong>Recipient:</strong> ${testNumber}</p>
+          <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+        `,
+        icon: "success",
+        confirmButtonColor: "#3085d6",
+      });
+    } catch (err) {
+      console.error("Error:", err);
+      Swal.fire("Error", err.message, "error");
     }
-
-    fetchHistory();
-    fetchStats();
-    setMessage("");
-    setCharCount(0);
-    setSchedule(false);
-    setScheduleTime("");
-    setMessageType("custom");
-
-    Swal.fire("Success!", "SMS has been sent and archived.", "success");
   };
 
   return (
@@ -281,7 +312,6 @@ export default function SMS() {
           </button>
         </div>
 
-        {/* History List */}
         <div className="space-y-3 sm:space-y-4 max-h-[400px] overflow-y-auto">
           {history.filter((h) => h.archived === showArchive).length === 0 ? (
             <p className="text-gray-500 italic text-center py-6 text-sm">
@@ -337,7 +367,6 @@ export default function SMS() {
           )}
         </div>
 
-        {/* Stats */}
         <div className="mt-5 p-4 bg-blue-50 rounded-lg border border-blue-100">
           <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-blue-600" /> SMS Analytics

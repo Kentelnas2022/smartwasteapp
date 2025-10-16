@@ -18,7 +18,6 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-// ✅ Fix Leaflet marker icons
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
@@ -40,32 +39,66 @@ function RoutePicker({ points, setPoints }) {
   return null;
 }
 
+const getTimeLabel = (createdAt) => {
+  if (!createdAt) return "";
+  const now = new Date();
+  const created = new Date(createdAt);
+  const diffMs = now - created;
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHr / 24);
+
+  if (diffMin < 5) return "New";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  return `${diffDay}d ago`;
+};
+
 export default function Schedule() {
   const [day, setDay] = useState("");
   const [date, setDate] = useState("");
   const [purok, setPurok] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
-  const [plan, setPlan] = useState("A");
+  const [plan] = useState("A"); // ✅ Always Plan A
   const [wasteType, setWasteType] = useState("");
   const [status, setStatus] = useState("not-started");
   const [schedules, setSchedules] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [routePoints, setRoutePoints] = useState([]);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [sortOrder, setSortOrder] = useState("recent"); // ✅ Default: recent first
 
+  // ✅ Fetch schedules newest first
   const fetchSchedules = async () => {
     const { data, error } = await supabase
       .from("schedules")
       .select("*")
-      .order("date", { ascending: true })
-      .order("start_time", { ascending: true });
-    if (error) console.error("Error fetching schedules:", error);
-    else setSchedules(data || []);
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching schedules:", error);
+    } else {
+      setSchedules(data || []);
+    }
   };
 
   useEffect(() => {
     fetchSchedules();
+    const channel = supabase
+      .channel("realtime:schedules")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "schedules" },
+        () => fetchSchedules()
+      )
+      .subscribe();
+
+    const interval = setInterval(() => fetchSchedules(), 60000);
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleDateChange = (e) => {
@@ -86,25 +119,26 @@ export default function Schedule() {
     } else setDay("");
   };
 
-  // ✅ Add Schedule + Log Activity
+  // ✅ Modified: When new schedule is added, put it on top of the list
   const handleAddSchedule = async (e) => {
     e.preventDefault();
+    const routeJson = JSON.stringify(routePoints || []);
+
+    const schedulePayload = {
+      purok,
+      plan: "A", // Always Plan A when official adds
+      day,
+      date,
+      start_time: startTime,
+      end_time: endTime,
+      waste_type: wasteType,
+      status,
+      route_points: routeJson,
+    };
 
     const { data, error } = await supabase
       .from("schedules")
-      .insert([
-        {
-          purok,
-          plan,
-          day,
-          date,
-          start_time: startTime,
-          end_time: endTime,
-          waste_type: wasteType,
-          status,
-          route_points: JSON.stringify(routePoints || []),
-        },
-      ])
+      .insert([schedulePayload])
       .select("*");
 
     if (error) {
@@ -115,12 +149,15 @@ export default function Schedule() {
 
     if (data && data.length > 0) {
       const newSchedule = data[0];
-      const actionMessage = `Added new schedule for Purok ${newSchedule.purok} on ${newSchedule.date}`;
+      // ✅ Show the new schedule first
+      setSchedules((prev) => [newSchedule, ...prev]);
+
+      const actionMessage = `Added Plan A for Purok ${newSchedule.purok} on ${newSchedule.date}`;
       const { error: activityError } = await supabase.from("activities").insert([
         {
           action: actionMessage,
           type: "create",
-          schedule_id: newSchedule.id || newSchedule.schedule_id || null,
+          schedule_id: newSchedule.schedule_id || newSchedule.id || null,
         },
       ]);
       if (activityError) console.error("Error logging activity:", activityError);
@@ -131,12 +168,10 @@ export default function Schedule() {
     setPurok("");
     setStartTime("");
     setEndTime("");
-    setPlan("A");
     setWasteType("");
     setStatus("not-started");
     setRoutePoints([]);
     setIsModalOpen(false);
-    fetchSchedules();
   };
 
   const formatDate = (dateStr, dayLabel) => {
@@ -182,10 +217,23 @@ export default function Schedule() {
     return raw.charAt(0).toUpperCase() + raw.slice(1);
   };
 
-  const filteredSchedules = schedules.filter((sched) => {
-    if (statusFilter === "all") return true;
-    return (sched.status || "").toLowerCase() === statusFilter;
-  });
+  const filteredSchedules = schedules
+    .filter((sched) => {
+      if (statusFilter === "all") return true;
+      return (sched.status || "").toLowerCase() === statusFilter;
+    })
+    .sort((a, b) => {
+      if (sortOrder === "recent") {
+        return new Date(b.created_at) - new Date(a.created_at);
+      } else {
+        return new Date(a.created_at) - new Date(b.created_at);
+      }
+    });
+
+  const newestId =
+    sortOrder === "recent"
+      ? filteredSchedules[0]?.id
+      : filteredSchedules[filteredSchedules.length - 1]?.id;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-10">
@@ -194,32 +242,62 @@ export default function Schedule() {
         Manage Garbage Collection Schedule
       </h2>
 
-      {/* Filter Dropdown + Add Button */}
+      {/* Filters */}
       <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
-        <div className="relative w-full sm:w-auto">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className={`appearance-none rounded-lg px-4 py-2 pr-10 shadow-sm focus:outline-none focus:ring-2 transition w-full sm:w-auto ${dropdownColors[statusFilter] || "bg-gray-100 text-gray-800"}`}
-          >
-            <option value="all">All</option>
-            <option value="not-started">Not Started</option>
-            <option value="ongoing">Ongoing</option>
-            <option value="completed">Completed</option>
-          </select>
-          <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-            <svg
-              className="w-5 h-5 text-gray-500"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
+        <div className="flex gap-3">
+          <div className="relative">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className={`appearance-none rounded-lg px-4 py-2 pr-10 shadow-sm focus:outline-none focus:ring-2 transition ${
+                dropdownColors[statusFilter] || "bg-gray-100 text-gray-800"
+              }`}
             >
-              <path
-                fillRule="evenodd"
-                d="M5.23 7.21a.75.75 0 011.06.02L10 10.939l3.71-3.71a.75.75 0 111.06 1.061l-4.24 4.25a.75.75 0 01-1.06 0L5.25 8.29a.75.75 0 01-.02-1.06z"
-                clipRule="evenodd"
-              />
-            </svg>
+              <option value="all">All</option>
+              <option value="not-started">Not Started</option>
+              <option value="ongoing">Ongoing</option>
+              <option value="completed">Completed</option>
+            </select>
+            <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+              <svg
+                className="w-5 h-5 text-gray-500"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.23 7.21a.75.75 0 011.06.02L10 10.939l3.71-3.71a.75.75 0 111.06 1.061l-4.24 4.25a.75.75 0 01-1.06 0L5.25 8.29a.75.75 0 01-.02-1.06z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+          </div>
+
+          {/* Sort dropdown */}
+          <div className="relative">
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              className="appearance-none rounded-lg px-4 py-2 pr-10 shadow-sm focus:outline-none focus:ring-2 bg-gray-100 text-gray-800"
+            >
+              <option value="oldest">By Date (Oldest)</option>
+              <option value="recent">By Date (Recent)</option>
+            </select>
+            <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+              <svg
+                className="w-5 h-5 text-gray-500"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.23 7.21a.75.75 0 011.06.02L10 10.939l3.71-3.71a.75.75 0 111.06 1.061l-4.24 4.25a.75.75 0 01-1.06 0L5.25 8.29a.75.75 0 01-.02-1.06z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
           </div>
         </div>
 
@@ -231,7 +309,7 @@ export default function Schedule() {
         </button>
       </div>
 
-      {/* ✅ Responsive Table Wrapper */}
+      {/* Table */}
       <div className="bg-white shadow rounded-lg overflow-hidden border border-gray-200">
         <div className="overflow-x-auto w-full">
           <table className="min-w-full text-sm table-auto">
@@ -241,31 +319,54 @@ export default function Schedule() {
                 <th className="py-3 px-4 text-left whitespace-nowrap">Purok</th>
                 <th className="py-3 px-4 text-left whitespace-nowrap">Time</th>
                 <th className="py-3 px-4 text-left whitespace-nowrap">Plan</th>
-                <th className="py-3 px-4 text-left whitespace-nowrap">Waste Type</th>
+                <th className="py-3 px-4 text-left whitespace-nowrap">
+                  Waste Type
+                </th>
                 <th className="py-3 px-4 text-left whitespace-nowrap">Status</th>
+                <th className="py-3 px-4 text-left whitespace-nowrap">Added</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {filteredSchedules.length > 0 ? (
                 filteredSchedules.map((sched) => {
                   const id =
-                    sched.schedule_id ?? sched.id ?? `${sched.date}-${sched.purok}`;
+                    sched.schedule_id ??
+                    sched.id ??
+                    `${sched.date}-${sched.purok}`;
                   const planValue = String(sched.plan || "").trim();
-                  const statusValue = String(sched.status || "not-started").trim();
+                  const statusValue = String(
+                    sched.status || "not-started"
+                  ).trim();
                   const badgeClass =
-                    statusColors[statusValue] || "bg-gray-100 text-gray-700";
+                    statusColors[statusValue] ||
+                    "bg-gray-100 text-gray-700";
+                  const timeLabel = getTimeLabel(sched.created_at);
 
                   return (
-                    <tr key={id} className="hover:bg-gray-50">
+                    <tr
+                      key={id}
+                      className={`hover:bg-gray-50 transition ${
+                        sched.id === newestId
+                          ? "animate-strong-pulse bg-green-100"
+                          : ""
+                      }`}
+                    >
                       <td className="py-3 px-4 whitespace-nowrap">
                         {formatDate(sched.date, sched.day)}
                       </td>
-                      <td className="py-3 px-4 whitespace-nowrap">Purok {sched.purok}</td>
                       <td className="py-3 px-4 whitespace-nowrap">
-                        {formatTime(sched.start_time)} - {formatTime(sched.end_time)}
+                        Purok {sched.purok}
                       </td>
-                      <td className="py-3 px-4 whitespace-nowrap">{planValue}</td>
-                      <td className="py-3 px-4 whitespace-nowrap">{sched.waste_type}</td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        {formatTime(sched.start_time)} -{" "}
+                        {formatTime(sched.end_time)}
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        {planValue}
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        {sched.waste_type}
+                      </td>
                       <td className="py-3 px-4 whitespace-nowrap">
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-medium ${badgeClass}`}
@@ -273,13 +374,16 @@ export default function Schedule() {
                           {statusLabel(statusValue)}
                         </span>
                       </td>
+                      <td className="py-3 px-4 whitespace-nowrap text-gray-500 text-xs">
+                        {timeLabel}
+                      </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="py-6 text-center text-gray-400 text-base"
                   >
                     No schedules available
@@ -295,7 +399,9 @@ export default function Schedule() {
       {isModalOpen && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50 p-4">
           <div className="bg-white rounded-lg shadow-lg max-w-lg w-full p-6 space-y-4 overflow-y-auto max-h-[90vh]">
-            <h3 className="text-lg font-semibold text-red-600">Add New Schedule</h3>
+            <h3 className="text-lg font-semibold text-red-600">
+              Add New Schedule (Plan A)
+            </h3>
             <form onSubmit={handleAddSchedule} className="space-y-3">
               <input
                 type="date"
@@ -339,14 +445,7 @@ export default function Schedule() {
                   required
                 />
               </div>
-              <select
-                value={plan}
-                onChange={(e) => setPlan(e.target.value)}
-                className="w-full border p-2 rounded"
-              >
-                <option value="A">Plan A</option>
-                <option value="B">Plan B</option>
-              </select>
+
               <select
                 value={wasteType}
                 onChange={(e) => setWasteType(e.target.value)}
@@ -354,10 +453,15 @@ export default function Schedule() {
                 required
               >
                 <option value="">Select Waste Type</option>
-                <option value="Recyclable Materials">♻️ Recyclable Materials</option>
+                <option value="Recyclable Materials">
+                  ♻️ Recyclable Materials
+                </option>
                 <option value="Toxic Materials">☣️ Toxic Materials</option>
-                <option value="Non-Recyclable Materials">🗑️ Non-Recyclable Materials</option>
+                <option value="Non-Recyclable Materials">
+                  🗑️ Non-Recyclable Materials
+                </option>
               </select>
+
               <div>
                 <label className="block mb-1 text-sm">
                   Pick Route (click start and end)
@@ -384,6 +488,7 @@ export default function Schedule() {
                     : "Route selected"}
                 </p>
               </div>
+
               <div className="flex justify-end gap-2 pt-3">
                 <button
                   type="button"

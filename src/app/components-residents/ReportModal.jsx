@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/supabaseClient";
-import Swal from "sweetalert2"; // ✅ Import SweetAlert2
+import Swal from "sweetalert2";
 
 export default function ReportModal({ isOpen, onClose }) {
   const [title, setTitle] = useState("");
@@ -27,6 +27,7 @@ export default function ReportModal({ isOpen, onClose }) {
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  // ✅ Handle ESC key to close modal
   useEffect(() => {
     function onKey(e) {
       if (e.key === "Escape") onClose();
@@ -41,7 +42,7 @@ export default function ReportModal({ isOpen, onClose }) {
     if (e.target.files) setFiles(Array.from(e.target.files));
   };
 
-  // ✅ Submit report to Supabase
+  // ✅ Submit report and sync with all related tables
   async function handleSubmit(e) {
     e.preventDefault();
 
@@ -71,7 +72,7 @@ export default function ReportModal({ isOpen, onClose }) {
       const userId = session.user.id;
       const uploadedUrls = [];
 
-      // ✅ Upload files
+      // ✅ Upload any attached files
       for (const file of files) {
         const ext = file.name.split(".").pop();
         const filePath = `reports/${userId}/${Date.now()}-${Math.random()
@@ -93,20 +94,71 @@ export default function ReportModal({ isOpen, onClose }) {
         uploadedUrls.push(signedData.signedUrl);
       }
 
-      // ✅ Insert into database
-      const { data, error: insertError } = await supabase.from("reports").insert([
-        {
-          title,
-          description,
-          location,
-          file_urls: uploadedUrls,
-          user_id: userId,
-        },
-      ]).select();
+      // ✅ Insert into reports table (with initial status)
+      const { data: reportData, error: insertError } = await supabase
+        .from("reports")
+        .insert([
+          {
+            title,
+            description,
+            location,
+            file_urls: uploadedUrls,
+            user_id: userId,
+            status: "Pending",
+            official_response: "",
+          },
+        ])
+        .select()
+        .single();
 
       if (insertError) throw insertError;
 
-      // ✅ SweetAlert success message
+      const reportId = reportData.id;
+
+      // ✅ Create linked entry in report_status table
+      const { error: statusError } = await supabase.from("report_status").insert([
+        {
+          report_id: reportId,
+          status: "Pending",
+          official_response: "",
+          location: location,
+          updated_by: null,
+        },
+      ]);
+      if (statusError) throw statusError;
+
+      // ✅ Create or update notification (ensuring only one per report)
+      const { data: existingNotif } = await supabase
+        .from("notifications")
+        .select("id")
+        .eq("report_id", reportId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (existingNotif) {
+        // Update existing notification
+        await supabase
+          .from("notifications")
+          .update({
+            message: `You submitted a new report: ${title}`,
+            status: "Pending",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingNotif.id);
+      } else {
+        // Insert new notification
+        await supabase.from("notifications").insert([
+          {
+            user_id: userId,
+            report_id: reportId,
+            message: `You submitted a new report: ${title}`,
+            status: "Pending",
+            created_at: new Date(),
+          },
+        ]);
+      }
+
+      // ✅ Show success popup
       Swal.fire({
         icon: "success",
         title: "Report Submitted!",
@@ -114,29 +166,14 @@ export default function ReportModal({ isOpen, onClose }) {
         confirmButtonColor: "#16a34a",
       });
 
-      // ✅ NEW: Add Notification Trigger (for Navbar Bell)
-      // This will automatically appear in your Navbar's real-time notification listener
-      if (data && data[0]) {
-        const report = data[0];
-        await supabase
-          .from("notifications")
-          .insert([
-            {
-              user_id: userId,
-              report_id: report.id,
-              message: `You submitted a new report: ${report.title}`,
-              status: "Pending",
-              created_at: new Date(),
-            },
-          ]);
-      }
-
+      // ✅ Reset form
       e.target.reset();
       setTitle("");
       setDescription("");
       setLocation("");
       setFiles([]);
 
+      // ✅ Close modal after short delay
       setTimeout(() => {
         onClose();
       }, 1500);
@@ -160,7 +197,6 @@ export default function ReportModal({ isOpen, onClose }) {
     >
       <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
-          {/* Header */}
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-xl font-bold text-gray-800">Report an Issue</h3>
             <button
@@ -183,7 +219,6 @@ export default function ReportModal({ isOpen, onClose }) {
             </button>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">

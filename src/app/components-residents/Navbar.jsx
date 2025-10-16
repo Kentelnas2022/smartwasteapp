@@ -12,224 +12,196 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
   const [user, setUser] = useState(null);
   const [userEmail, setUserEmail] = useState("");
   const [userAvatar, setUserAvatar] = useState("/default-avatar.png");
-  const sidebarRef = useRef();
   const router = useRouter();
+  const channelRef = useRef(null);
 
-  // ✅ Fetch logged-in user info
+  // ✅ Fetch logged-in user info and notifications
   useEffect(() => {
-    const fetchUser = async () => {
+    const fetchUserAndNotifications = async () => {
       const { data, error } = await supabase.auth.getUser();
-      if (error) return console.error("Error fetching user:", error.message);
+      if (error) {
+        console.error("User fetch error:", error.message);
+        return;
+      }
+
       const currentUser = data?.user;
       setUser(currentUser);
+
       if (currentUser) {
         setUserEmail(currentUser.email || "Unknown User");
 
-        const { data: profileData } = await supabase
+        const { data: profile } = await supabase
           .from("profiles")
           .select("avatar_url")
           .eq("id", currentUser.id)
           .single();
 
-        if (profileData?.avatar_url) setUserAvatar(profileData.avatar_url);
+        if (profile?.avatar_url) setUserAvatar(profile.avatar_url);
+
+        await fetchNotifications(currentUser.id);
+        subscribeToNotifications(currentUser.id);
       }
     };
 
-    fetchUser();
+    fetchUserAndNotifications();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => listener.subscription.unsubscribe();
+    // Cleanup realtime channel on unmount
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
   }, []);
 
-  // ✅ Fetch notifications from the notifications table
-  useEffect(() => {
-    if (!user) return;
+  // ✅ Fetch notifications from DB (once)
+  const fetchNotifications = async (uid) => {
+    if (!uid) return;
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", uid)
+      .order("created_at", { ascending: false });
 
-    const fetchNotifications = async () => {
-      const { data, error } = await supabase
-        .from("notifications")
-        .select("id, message, status, created_at, read, user_id")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+    if (error) console.error("Fetch error:", error.message);
+    else setNotifications(data || []);
+  };
 
-      if (error) console.error("Error fetching notifications:", error.message);
-      else setNotifications(data || []);
-    };
+  // ✅ Realtime subscription (single instance)
+  const subscribeToNotifications = (uid) => {
+    if (channelRef.current) return; // avoid duplicate subscriptions
 
-    fetchNotifications();
-
-    // 🔥 Real-time listener for notifications
-    const channel = supabase
-      .channel("notifications-realtime")
+    channelRef.current = supabase
+      .channel(`notifications-${uid}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "notifications" },
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${uid}`,
+        },
         (payload) => {
           const notif = payload.new;
-          if (notif.user_id !== user.id) return;
+          const old = payload.old;
 
-          // 🆕 New notification
-          if (payload.eventType === "INSERT") {
-            Swal.fire({
-              icon: "info",
-              title: "New Notification",
-              text: notif.message,
-              timer: 2000,
-              showConfirmButton: false,
-            });
-            setNotifications((prev) => [notif, ...prev]);
-          }
+          switch (payload.eventType) {
+            case "INSERT":
+              setNotifications((prev) => {
+                const exists = prev.some((n) => n.id === notif.id);
+                if (exists) return prev;
+                Swal.fire({
+                  icon: "info",
+                  title: "New Notification",
+                  text: notif.message,
+                  timer: 2500,
+                  showConfirmButton: false,
+                });
+                return [notif, ...prev];
+              });
+              break;
 
-          // 🔄 Updated notification (status changed)
-          if (payload.eventType === "UPDATE") {
-            Swal.fire({
-              icon: "success",
-              title: "Notification Updated",
-              text: notif.message,
-              timer: 2000,
-              showConfirmButton: false,
-            });
+            case "UPDATE":
+              setNotifications((prev) =>
+                prev.map((n) => (n.id === notif.id ? notif : n))
+              );
+              Swal.fire({
+                icon: "success",
+                title: "Notification Updated",
+                text: notif.official_response
+                  ? `Response: ${notif.official_response}`
+                  : `Status changed to ${notif.status}`,
+                timer: 2500,
+                showConfirmButton: false,
+              });
+              break;
 
-            setNotifications((prev) =>
-              prev.map((n) => (n.id === notif.id ? { ...n, ...notif } : n))
-            );
+            case "DELETE":
+              setNotifications((prev) => prev.filter((n) => n.id !== old.id));
+              break;
+
+            default:
+              break;
           }
         }
       )
       .subscribe();
-
-    return () => supabase.removeChannel(channel);
-  }, [user]);
+  };
 
   // ✅ Mark all as read
   const markAllAsRead = async () => {
-    if (notifications.length === 0) {
-      Swal.fire({
-        icon: "info",
-        title: "No New Notifications",
-        text: "You're all caught up!",
-        confirmButtonColor: "#8B0000",
-      });
+    if (!notifications.length) {
+      Swal.fire("No new notifications", "You're all caught up!", "info");
       return;
     }
 
-    await supabase
-      .from("notifications")
-      .update({ read: true })
-      .eq("user_id", user.id);
-
+    await supabase.from("notifications").update({ read: true }).eq("user_id", user.id);
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    Swal.fire({
-      icon: "success",
-      title: "All Notifications Read",
-      showConfirmButton: false,
-      timer: 1200,
-    });
+    Swal.fire("Done!", "All notifications marked as read.", "success");
   };
 
-  // ✅ Clear all notifications
+  // ✅ Clear all notifications (no re-fetch)
   const clearAllNotifications = async () => {
-    if (notifications.length === 0) {
-      Swal.fire({
-        icon: "info",
-        title: "No Notifications",
-        text: "Nothing to clear.",
-        confirmButtonColor: "#8B0000",
-      });
+    if (!notifications.length) {
+      Swal.fire("Nothing to clear", "", "info");
       return;
     }
 
     const confirm = await Swal.fire({
+      title: "Clear all notifications?",
+      text: "This cannot be undone.",
       icon: "warning",
-      title: "Clear All Notifications?",
-      text: "This will remove all notifications from view.",
       showCancelButton: true,
-      confirmButtonColor: "#8B0000",
-      cancelButtonColor: "#6b7280",
       confirmButtonText: "Yes, clear all",
     });
 
     if (confirm.isConfirmed) {
       await supabase.from("notifications").delete().eq("user_id", user.id);
       setNotifications([]);
-      Swal.fire({
-        icon: "success",
-        title: "All Cleared!",
-        showConfirmButton: false,
-        timer: 1200,
-      });
+      Swal.fire("Cleared!", "All notifications removed.", "success");
     }
   };
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
-
-  // ✅ Show notification popup
+  // ✅ Display notifications
   const showNotifications = () => {
-    if (notifications.length === 0) {
-      Swal.fire({
-        icon: "info",
-        title: "No Notifications",
-        text: "You don't have any notifications yet.",
-        confirmButtonColor: "#8B0000",
-      });
+    if (!notifications.length) {
+      Swal.fire("No Notifications", "You're all caught up!", "info");
       return;
     }
 
-    const grouped = notifications.reduce((acc, notif) => {
-      const key = notif.status || "Others";
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(notif);
-      return acc;
-    }, {});
-
-    const html = Object.entries(grouped)
-      .map(
-        ([status, items]) => `
-        <div style="margin-bottom:16px;">
-          <h3 style="color:#8B0000;margin-bottom:6px;text-align:left;font-weight:600;">
-            ${status}
-          </h3>
-          ${items
-            .map(
-              (n) => `
-            <div style="padding:6px 0;border-bottom:1px solid #eee;text-align:left;">
-              <p style="font-size:14px;margin:0;">${n.message}</p>
-              <small style="color:gray;">${new Date(
-                n.created_at
-              ).toLocaleString()}</small>
-            </div>
-          `
-            )
-            .join("")}
-        </div>
-      `
-      )
+    const html = notifications
+      .map((n) => {
+        const date = new Date(n.updated_at || n.created_at).toLocaleString();
+        return `
+          <div style="padding:8px 0;border-bottom:1px solid #ddd;text-align:left;">
+            <p><strong>${n.message}</strong></p>
+            <p>Status: <b>${n.status}</b></p>
+            ${n.official_response ? `<p>Response: ${n.official_response}</p>` : ""}
+            <small>${date}</small>
+          </div>`;
+      })
       .join("");
 
     Swal.fire({
-      title: "Your Notifications",
-      html: html || "<p>No notifications yet.</p>",
+      title: "Notifications",
+      html,
       width: 420,
       showDenyButton: true,
       showCancelButton: true,
       confirmButtonText: "Mark All as Read",
       denyButtonText: "Clear All",
       cancelButtonText: "Close",
-      confirmButtonColor: "#8B0000",
-      denyButtonColor: "#a30000",
     }).then(async (res) => {
       if (res.isConfirmed) await markAllAsRead();
       else if (res.isDenied) await clearAllNotifications();
     });
   };
 
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
   // ✅ Logout
   const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) return alert("Failed to logout. Please try again.");
+    await supabase.auth.signOut();
     localStorage.removeItem("activePage");
     setOpen(false);
     router.push("/login");
@@ -246,7 +218,7 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
 
   return (
     <>
-      {/* ✅ NAVBAR */}
+      {/* NAVBAR */}
       <nav className="bg-[#8B0000] text-white p-4 shadow-md sticky top-0 z-40">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <h1 className="text-lg font-semibold">Residents Dashboard</h1>
@@ -255,14 +227,9 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
             {/* 🔔 Notifications */}
             <button
               onClick={showNotifications}
-              className="relative p-2 rounded-full hover:bg-[#a30000] transition-all"
+              className="relative p-2 rounded-full hover:bg-[#a30000]"
             >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -278,76 +245,42 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
             </button>
 
             {/* 🍔 Menu Button */}
-            <button
-              onClick={() => setOpen(true)}
-              className="p-2 rounded-full hover:bg-[#a30000]"
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
+            <button onClick={() => setOpen(true)} className="p-2 rounded-full hover:bg-[#a30000]">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
           </div>
         </div>
       </nav>
 
-      {/* ✅ SIDEBAR MENU */}
+      {/* SIDEBAR MENU */}
       <div
         className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-50 transition-opacity duration-300 ${
           open ? "opacity-100 visible" : "opacity-0 invisible"
         }`}
       >
         <div
-          ref={sidebarRef}
-          className={`fixed top-0 right-0 h-full w-72 sm:w-64 bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ${
+          className={`fixed top-0 right-0 h-full w-72 bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ${
             open ? "translate-x-0" : "translate-x-full"
           }`}
         >
-          <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <div className="flex items-center justify-between p-4 border-b">
             <h2 className="text-lg font-semibold text-[#8B0000]">Menu</h2>
-            <button
-              onClick={() => setOpen(false)}
-              className="p-2 rounded-full hover:bg-gray-100 transition-all"
-            >
-              <svg
-                className="w-5 h-5 text-gray-700"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
+            <button onClick={() => setOpen(false)}>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
-          {/* PROFILE SECTION */}
-          <div className="flex flex-col items-center py-6 px-4 border-b border-gray-200">
-            <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-[#8B0000] mb-3 shadow-md">
-              <img
-                src={userAvatar}
-                alt="User Avatar"
-                className="w-full h-full object-cover"
-              />
+          {/* PROFILE */}
+          <div className="flex flex-col items-center py-6 border-b">
+            <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-[#8B0000] mb-3">
+              <img src={userAvatar} alt="Avatar" className="w-full h-full object-cover" />
             </div>
             <p className="text-base font-semibold">{shortenEmail(userEmail)}</p>
-            <a
-              href="/profile"
-              className="text-sm text-[#8B0000] mt-1 hover:underline"
-            >
+            <a href="/profile" className="text-sm text-[#8B0000] mt-1 hover:underline">
               View Profile
             </a>
           </div>
@@ -361,7 +294,7 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
                   onClick={() => {
                     item.onClick?.();
                     setActivePage(item.key);
-                    setOpen(false);
+                    setOpen(false); 
                   }}
                   className={`block w-full text-left px-6 py-3 font-medium ${
                     activePage === item.key
@@ -375,7 +308,7 @@ export default function Navbar({ onOpenSchedule, onOpenReport, onOpenEducation }
             </div>
 
             {/* LOGOUT */}
-            <div className="border-t border-gray-200 p-4">
+            <div className="border-t p-4">
               <button
                 onClick={handleLogout}
                 className="w-full bg-[#8B0000] text-white py-2 rounded-lg font-medium hover:bg-[#a30000]"

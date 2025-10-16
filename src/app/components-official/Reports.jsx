@@ -1,7 +1,13 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/supabaseClient";
-import { Paperclip, MessageSquare, CheckCircle, Star, Eye, MapPin } from "lucide-react";
+import {
+  Paperclip,
+  MessageSquare,
+  CheckCircle,
+  Eye,
+  MapPin,
+} from "lucide-react";
 
 export default function Reports() {
   const [reports, setReports] = useState([]);
@@ -10,10 +16,8 @@ export default function Reports() {
   const [processingIds, setProcessingIds] = useState([]);
   const [user, setUser] = useState(null);
   const [official, setOfficial] = useState(null);
-  const [feedbacks, setFeedbacks] = useState({});
-  const [viewingFeedbackId, setViewingFeedbackId] = useState(null);
 
-  // ✅ Fetch current user
+  // ✅ Fetch logged-in user
   useEffect(() => {
     const fetchUser = async () => {
       const {
@@ -23,13 +27,13 @@ export default function Reports() {
     };
     fetchUser();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => setUser(session?.user ?? null)
+    );
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // ✅ Verify official role
+  // ✅ Verify official
   useEffect(() => {
     const verifyOfficial = async () => {
       if (!user) return;
@@ -43,7 +47,7 @@ export default function Reports() {
     verifyOfficial();
   }, [user]);
 
-  // ✅ Fetch reports with their latest status
+  // ✅ Fetch reports and listen for realtime updates
   useEffect(() => {
     fetchReports();
 
@@ -62,7 +66,10 @@ export default function Reports() {
             setReports((prev) =>
               prev.map((r) =>
                 r.id === payload.new.id
-                  ? { ...normalizeReport(payload.new), draftResponse: r.draftResponse || "" }
+                  ? {
+                      ...normalizeReport(payload.new),
+                      draftResponse: r.draftResponse || "",
+                    }
                   : r
               )
             );
@@ -97,10 +104,11 @@ export default function Reports() {
 
   const fetchReports = async () => {
     setLoading(true);
-
     const { data: reportsData, error } = await supabase
       .from("reports")
-      .select("id, title, description, file_urls, created_at, user_id, location")
+      .select(
+        "id, title, description, file_urls, created_at, user_id, location, status, official_response"
+      )
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -116,22 +124,19 @@ export default function Reports() {
       .select("report_id, status, official_response")
       .in("report_id", reportIds);
 
-    if (statusError) {
+    if (statusError)
       console.error("❌ Error fetching statuses:", statusError.message);
-    }
 
-    // ✅ Always take the *latest* status if duplicates ever exist
     const latestStatus = {};
-    statusData?.forEach((s) => {
-      latestStatus[s.report_id] = s;
-    });
+    statusData?.forEach((s) => (latestStatus[s.report_id] = s));
 
     const normalized = reportsData.map((r) => {
       const statusEntry = latestStatus[r.id];
       return {
         ...normalizeReport(r),
-        status: statusEntry?.status || "Pending",
-        official_response: statusEntry?.official_response || "",
+        status: statusEntry?.status || r.status || "Pending",
+        official_response:
+          statusEntry?.official_response || r.official_response || "",
         draftResponse: "",
       };
     });
@@ -140,7 +145,54 @@ export default function Reports() {
     setLoading(false);
   };
 
-  // ✅ Handle comment or mark resolved
+  // ✅ Fix: Update or create notification properly (one per report)
+  const updateOrCreateNotification = async (report, nextStatus, notifMessage) => {
+    try {
+      const { data: existing, error: selectErr } = await supabase
+        .from("notifications")
+        .select("id")
+        .eq("report_id", report.id)
+        .eq("user_id", report.user_id)
+        .limit(1);
+
+      if (selectErr) {
+        console.error("❌ Select notification error:", selectErr.message);
+        return;
+      }
+
+      if (existing && existing.length > 0) {
+        const { error: updateErr } = await supabase
+          .from("notifications")
+          .update({
+            message: notifMessage,
+            status: nextStatus,
+            read: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existing[0].id);
+
+        if (updateErr)
+          console.error("❌ Update notification error:", updateErr.message);
+      } else {
+        const { error: insertErr } = await supabase.from("notifications").insert([
+          {
+            report_id: report.id,
+            user_id: report.user_id,
+            message: notifMessage,
+            status: nextStatus,
+            read: false,
+            created_at: new Date().toISOString(),
+          },
+        ]);
+        if (insertErr)
+          console.error("❌ Insert notification error:", insertErr.message);
+      }
+    } catch (err) {
+      console.error("❌ Notification update failed:", err.message);
+    }
+  };
+
+  // ✅ Updated handleRespond (syncs both tables + single notification)
   const handleRespond = async (report, resolve = false) => {
     if (!report.draftResponse && !resolve) {
       alert("Please enter a response before sending.");
@@ -153,14 +205,16 @@ export default function Reports() {
 
     setProcessingIds((prev) => [...prev, report.id]);
     const nextStatus = resolve ? "Resolved" : "In Progress";
+    const responseText = report.draftResponse || report.official_response || "";
 
+    // ✅ Optimistic UI update
     setReports((prev) =>
       prev.map((r) =>
         r.id === report.id
           ? {
               ...r,
               status: nextStatus,
-              official_response: report.draftResponse || r.official_response,
+              official_response: responseText,
               draftResponse: "",
             }
           : r
@@ -168,15 +222,17 @@ export default function Reports() {
     );
 
     try {
+      // ✅ 1. Upsert status into report_status
       const { data: updated, error } = await supabase
         .from("report_status")
         .upsert(
           {
             report_id: report.id,
             status: nextStatus,
-            official_response: report.draftResponse || report.official_response,
+            official_response: responseText,
             updated_by: user.id,
-            location: report.location, // ✅ Track location in report_status
+            location: report.location,
+            updated_at: new Date().toISOString(),
           },
           { onConflict: "report_id" }
         )
@@ -185,65 +241,45 @@ export default function Reports() {
 
       if (error) throw error;
 
-      await supabase.from("activities").insert([{
-        action: resolve ? "Marked report as resolved" : "Responded to report",
-        type: "report_update",
-        created_at: new Date().toISOString(),
-      }]);
+      // ✅ 2. Update main reports table to reflect latest status & response
+      const { error: updateMainError } = await supabase
+        .from("reports")
+        .update({
+          status: nextStatus,
+          official_response: responseText,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", report.id);
 
+      if (updateMainError)
+        console.error("⚠️ Error updating reports table:", updateMainError.message);
+
+      // ✅ 3. Log activity
+      await supabase.from("activities").insert([
+        {
+          action: resolve ? "Marked report as resolved" : "Responded to report",
+          type: "report_update",
+          created_at: new Date().toISOString(),
+        },
+      ]);
+
+      // ✅ 4. Handle notification (ensure one per report)
       if (report.user_id) {
         const notifMessage = resolve
-          ? `Your report from ${report.location} has been marked as resolved${
-              updated?.official_response ? `: ${updated.official_response}` : "."
-            }`
-          : ` Official responded to your report from ${report.location}: ${updated?.official_response}`;
-        await supabase.from("notifications").insert([
-  {
-    report_id: report.id,
-    user_id: report.user_id,
-    message: notifMessage,
-    read: false,
-    status: resolve ? "Resolved" : "Responded",
-  },
-]);
+          ? `Your report titled "${report.title}" has been marked as resolved: ${updated?.official_response || ""}`
+          : `Official responded to your report titled "${report.title}": ${updated?.official_response || ""}`;
+
+        await updateOrCreateNotification(report, nextStatus, notifMessage);
       }
     } catch (err) {
       console.error("❌ handleRespond error:", err.message || err);
       alert("Failed to update report.");
     } finally {
       setProcessingIds((prev) => prev.filter((id) => id !== report.id));
-      fetchReports(); // ✅ Refresh data to keep it accurate
+      fetchReports();
     }
   };
 
-  // ✅ Fetch feedback for resolved reports
-  const fetchFeedback = async (reportId) => {
-    if (feedbacks[reportId]) {
-      setViewingFeedbackId(viewingFeedbackId === reportId ? null : reportId);
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("feedback")
-      .select("rating, comment, created_at")
-      .eq("report_id", reportId)
-      .maybeSingle();
-
-    if (error) {
-      console.error("❌ Error fetching feedback:", error.message);
-      alert("Failed to load feedback.");
-      return;
-    }
-
-    if (data) {
-      setFeedbacks((prev) => ({ ...prev, [reportId]: data }));
-      setViewingFeedbackId(reportId);
-    } else {
-      alert("No feedback yet for this report.");
-    }
-  };
-
-  // ✅ UI
   if (loading)
     return <div className="p-6 text-center text-gray-500">Loading reports...</div>;
 
@@ -267,7 +303,6 @@ export default function Reports() {
               <p className="text-sm text-gray-500 mt-1">
                 Submitted on {new Date(report.created_at).toLocaleString()}
               </p>
-              {/* ✅ Show Location */}
               <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
                 <MapPin size={14} className="text-red-500" />
                 {report.location}
@@ -319,7 +354,7 @@ export default function Reports() {
             </div>
           )}
 
-          {/* ✅ Buttons */}
+          {/* ✅ Action buttons */}
           <div className="mt-4 flex gap-3 flex-wrap">
             {report.status === "Pending" && (
               <button
@@ -340,17 +375,9 @@ export default function Reports() {
                 className="flex items-center gap-1 px-3 py-2 text-sm rounded-lg bg-green-500 text-white hover:bg-green-600 disabled:opacity-50"
               >
                 <CheckCircle size={16} />
-                {processingIds.includes(report.id) ? "Processing..." : "Mark Resolved"}
-              </button>
-            )}
-
-            {report.status === "Resolved" && (
-              <button
-                onClick={() => fetchFeedback(report.id)}
-                className="flex items-center gap-1 px-3 py-2 text-sm rounded-lg bg-purple-500 text-white hover:bg-purple-600"
-              >
-                <Eye size={16} />
-                View Feedback
+                {processingIds.includes(report.id)
+                  ? "Processing..."
+                  : "Mark Resolved"}
               </button>
             )}
           </div>
@@ -363,7 +390,9 @@ export default function Reports() {
                 onChange={(e) =>
                   setReports((prev) =>
                     prev.map((r) =>
-                      r.id === report.id ? { ...r, draftResponse: e.target.value } : r
+                      r.id === report.id
+                        ? { ...r, draftResponse: e.target.value }
+                        : r
                     )
                   )
                 }
@@ -377,34 +406,11 @@ export default function Reports() {
                   disabled={processingIds.includes(report.id)}
                   className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {processingIds.includes(report.id) ? "Sending..." : "Send Comment"}
+                  {processingIds.includes(report.id)
+                    ? "Sending..."
+                    : "Send Comment"}
                 </button>
               </div>
-            </div>
-          )}
-
-          {/* ✅ Feedback display */}
-          {viewingFeedbackId === report.id && feedbacks[report.id] && (
-            <div className="mt-4 bg-purple-50 border-l-4 border-purple-500 p-4 rounded-lg">
-              <div className="flex gap-1 mb-2">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    size={18}
-                    className={
-                      i < feedbacks[report.id].rating
-                        ? "text-yellow-400 fill-yellow-400"
-                        : "text-gray-300"
-                    }
-                  />
-                ))}
-              </div>
-              <p className="text-gray-700 italic">
-                “{feedbacks[report.id].comment || "No comment provided."}”
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {new Date(feedbacks[report.id].created_at).toLocaleString()}
-              </p>
             </div>
           )}
         </div>
